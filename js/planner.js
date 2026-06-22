@@ -629,3 +629,24 @@ window.setupViewTabs = function() {
   };
 };
 window.setupViewTabs();
+// سیستم تب‌ها (Navigation Tabs)
+document.addEventListener('DOMContentLoaded', () => {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  const tabSections = document.querySelectorAll('.tab-section');
+
+  navButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 1. حذف کلاس active از همه دکمه‌ها و تب‌ها
+      navButtons.forEach(b => b.classList.remove('active'));
+      tabSections.forEach(s => s.classList.remove('active'));
+
+      // 2. اضافه کردن کلاس active به دکمه کلیک شده و تب مربوطه
+      btn.classList.add('active');
+      const targetId = btn.getAttribute('data-tab');
+      document.getElementById(targetId).classList.add('active');
+      
+      // 3. اسکرول نرم به بالای صفحه
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+});
