@@ -22,6 +22,7 @@ export const state = {
   events: load('planner_ev', []),
   cats: load('planner_cats', []),
   routines: load('planner_routines', []), 
+  goals: load('planner_goals', []), // مخزن اهداف ماهانه
   liveSession: load('planner_live', null),
   theme: load('planner_theme', 'dark'),
   curDate: getLocalDateStr(), // لود تاریخ محلی به جای UTC
@@ -46,7 +47,8 @@ export async function saveCloud(){
             cats: state.cats, 
             liveSession: state.liveSession, 
             theme: state.theme, 
-            routines: state.routines 
+            routines: state.routines,
+            goals: state.goals // همگام‌سازی اهداف در دیتابیس ابری
           }
         },
         { onConflict: 'user_id' }
@@ -79,12 +81,14 @@ export async function loadCloud(){
       state.theme       = cloudData.theme       || "dark";
       state.liveSession = cloudData.liveSession || null;
       state.routines    = cloudData.routines    || [];
+      state.goals       = cloudData.goals       || []; // لود داده‌های اهداف
 
       save('planner_ev',       state.events);
       save('planner_cats',     state.cats);
       save('planner_live',     state.liveSession);
       save('planner_theme',    state.theme);
       save('planner_routines', state.routines);
+      save('planner_goals',    state.goals);
     }
   } catch (err) {
     console.error("خطا در بارگذاری ابری اطلاعات از سوپابیس:", err);
