@@ -686,13 +686,10 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       };
-    } else {
+    }
+    else {
       notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
     }
   }
 });
-    } else {
-      notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
-    }
-  }
-});
+  
