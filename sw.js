@@ -65,3 +65,6 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+navigator.serviceWorker.ready.then(reg => {
+  reg.showNotification(title, options);
+});
