@@ -6,7 +6,6 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
   <meta name="theme-color" content="#111827">
   <meta charset="UTF-8">
-  <!-- این متا تگ برای جلوگیری از زوم ناخواسته در گوشی‌ها بسیار مهم است -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>تقویم روزانه</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -17,7 +16,7 @@
 @media(max-width: 768px) {
   body {
     padding: 12px 8px;
-    padding-bottom: 90px; /* جا باز کردن برای منوی پایین */
+    padding-bottom: 90px;
   }
   .header {
     flex-direction: column;
@@ -51,10 +50,9 @@
     border-radius: 12px;
   }
   
-  /* نکته تکمیلی: جلوگیری از زوم خودکار در آیفون (iOS) */
   input[type=text], select, .btn-primary, .btn-live {
     padding: 14px;
-    font-size: 16px !important; /* سایز 16 باعث میشه آیفون زوم نکنه */
+    font-size: 16px !important;
   }
 
   .activity-map { gap: 4px; }
@@ -66,7 +64,6 @@
   .timetable-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
   .timetable-day-col { min-height: 100px !important; }
 
-  /* منوی ناوبری اپلیکیشن برای موبایل */
   .app-nav {
     position: fixed;
     bottom: 0;
@@ -91,7 +88,6 @@
   .nav-icon { font-size: 22px; }
 }
 
-/* استایل‌های سیستم تب */
 .tab-section {
   display: none;
   animation: fadeIn 0.3s ease;
@@ -102,7 +98,6 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* منوی ناوبری اپلیکیشن در دسکتاپ */
 @media(min-width: 769px) {
   .app-nav {
     display: flex;
@@ -147,8 +142,21 @@
       تقویم روزانه
     </div>
     <div class="date-nav">
-      <div style="display:flex; align-items:center; gap:10px">
+      <div style="display:flex; align-items:center; gap:8px">
         <span id="welcome-msg" style="font-size:13px; color:var(--muted)"></span>
+        
+        <!-- دکمه فعال‌سازی اعلان جدید -->
+        <button id="notify-enable-btn" style="
+          padding:6px 12px;
+          border-radius:8px;
+          border:1px solid var(--border2);
+          background:var(--surface2);
+          color:var(--muted);
+          cursor:pointer;
+          font-family:inherit;
+          font-size:11px;
+        ">🔔 اعلان‌ها</button>
+
         <button id="logout-btn" style="padding:6px 14px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-family:inherit; font-size:12px;">خروج</button>
       </div>
       <button id="prev-day" title="روز قبل">&#8249;</button>
@@ -170,14 +178,13 @@
       <span class="nav-icon">📅</span> تایم‌لاین
     </button>
     <button class="nav-btn" data-tab="tab-add">
-      <span class="nav-icon">➕</span> افزودن
+      <span class="nav-icon">⚙️</span> ثبت و مدیریت
     </button>
     <button class="nav-btn" data-tab="tab-reports">
       <span class="nav-icon">📊</span> گزارش‌ها
     </button>
   </nav>
 
-  <!-- کانتینر تب‌ها -->
   <div class="tab-container">
     
     <!-- ================= تب 1: تایم‌لاین ================= -->
@@ -198,7 +205,7 @@
       </div>
     </div>
 
-    <!-- ================= تب 2: افزودن و مدیریت ================= -->
+    <!-- ================= تب 2: ثبت و مدیریت ================= -->
     <div id="tab-add" class="tab-section">
       <!-- Add Event -->
       <div class="card">
@@ -226,12 +233,10 @@
           <label>زمان شروع و پایان</label>
           <div class="time-row">
             <div class="time-field">
-              <!-- نکته تکمیلی: اضافه شدن inputmode="numeric" -->
               <input type="text" id="start-time" inputmode="numeric" placeholder="08:30" maxlength="5" autocomplete="off">
               <button class="now-btn" id="btn-now-s">الان</button>
             </div>
             <div class="time-field">
-              <!-- نکته تکمیلی: اضافه شدن inputmode="numeric" -->
               <input type="text" id="end-time" inputmode="numeric" placeholder="10:00" maxlength="5" autocomplete="off">
               <button class="now-btn" id="btn-now-e">الان</button>
             </div>
@@ -240,7 +245,6 @@
         </div>
         <div class="form-group">
           <label>مدت زمان وقفه / پاز (دقیقه - اختیاری)</label>
-          <!-- نکته تکمیلی: اضافه شدن inputmode="numeric" -->
           <input type="text" id="pause-time" inputmode="numeric" placeholder="مثلاً: ۳۰ (دقیقه)" maxlength="4" autocomplete="off">
         </div>
         <button class="btn-primary" id="add-btn">+ افزودن به تایم‌لاین</button>
@@ -259,7 +263,6 @@
         <div class="form-group">
           <label>زمان شروع و پایان</label>
           <div class="time-row">
-             <!-- نکته تکمیلی: اضافه شدن inputmode="numeric" -->
             <input type="text" id="rt-start" inputmode="numeric" placeholder="17:00" maxlength="5" autocomplete="off">
             <input type="text" id="rt-end" inputmode="numeric" placeholder="18:30" maxlength="5" autocomplete="off">
           </div>
@@ -289,7 +292,6 @@
           <span>گزارش دوره‌ای موضوعات</span>
           <div style="display:flex; align-items:center; gap:6px;">
             <span style="font-size:11px;">بازه:</span>
-            <!-- نکته تکمیلی: اضافه شدن inputmode="numeric" -->
             <input type="text" id="report-days" inputmode="numeric" value="7" style="width: 36px; text-align: center; padding: 4px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 6px;">
             <span style="font-size:11px;">روزه</span>
             <button id="report-confirm-btn" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: inherit; transition: opacity 0.15s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">تایید</button>
@@ -316,7 +318,7 @@
       </div>
     </div>
 
-  </div> <!-- End Tab Container -->
+  </div>
 </div>
 
 <script type="module" src="./js/planner.js"></script>
