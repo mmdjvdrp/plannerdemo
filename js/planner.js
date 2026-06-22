@@ -691,5 +691,5 @@ document.addEventListener('DOMContentLoaded', () => {
       notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
     }
   }
-});
+);
   
