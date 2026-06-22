@@ -43,10 +43,9 @@ export function renderCats(){
 
     const item=document.createElement('div');
     item.className='cat-item';
-    item.style.cursor = 'pointer'; // نمایش نشانگر دست برای قابلیت کلیک
+    item.style.cursor = 'pointer'; // ایجاد قابلیت لمسی/کلیک
     item.style.setProperty('--cat-color', c.color);
-    
-    // مشخص کردن دسته فعال فعلی به صورت بصری
+
     if (c.id === current) {
       item.classList.add('selected');
     }
@@ -58,21 +57,20 @@ export function renderCats(){
       <button class="cat-delete" type="button" title="حذف موضوع">×</button>
     `;
 
-    // سیستم انتخاب سریع با کلیک بر روی آیتم
+    // سیستم انتخاب سریع با کلیک مستقیم بر روی موضوع
     item.onclick = (e) => {
-      // اگر روی دکمه حذف یا پالت تغییر رنگ کلیک شد، عملیات انتخاب صورت نگیرد
       if (e.target.classList.contains('cat-color-edit') || e.target.classList.contains('cat-delete')) {
         return;
       }
-      // تنظیم مقدار انتخابگر فرم و نقشه به این موضوع
       sel.value = c.id;
       mapSel.value = c.id;
       
-      // تغییر استایل موضوع انتخاب‌شده به شکل آنی
+      const goalCatSel = document.getElementById('goal-cat-select');
+      if (goalCatSel) goalCatSel.value = c.id;
+
       document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('selected'));
       item.classList.add('selected');
-      
-      // اجرای رندر نقشه بدون فوکوس‌زدایی مجدد فرم
+
       renderActivityMap();
     };
 
@@ -89,18 +87,22 @@ export function renderCats(){
       saveCloud();
       render();
     };
-
-    const delBtn = item.querySelector('.cat-delete');
-    delBtn.onclick = (e) => {
-      e.stopPropagation(); // جلوگیری از فعال شدن رویداد کلیک والد (انتخاب دسته) در هنگام حذف
+    item.querySelector('.cat-delete').onclick=(e)=> {
+      e.stopPropagation(); // جلوگیری از انتخاب موضوع هنگام فشردن کلید حذف
       window.delCat(c.id);
     };
-
     manager.appendChild(item);
   });
   if(current && state.cats.some(c=>c.id===current)) sel.value=current;
   if(mapCurrent && state.cats.some(c=>c.id===mapCurrent)) mapSel.value=mapCurrent;
   else mapSel.value=state.cats[0].id;
+
+  // همگام‌سازی منوی ثبت اهداف
+  const goalCatSel = document.getElementById('goal-cat-select');
+  if (goalCatSel) {
+    goalCatSel.innerHTML = sel.innerHTML;
+    if (sel.value) goalCatSel.value = sel.value;
+  }
 }
 
 export function renderWeeklyTimetable() {
@@ -477,116 +479,89 @@ export function renderRoutines() {
   });
 }
 
-// ثانیه‌شمار زنده جهت بروزرسانی آنی و کورنومتری زمان خالص سپری‌شده
-function startLiveStopwatch() {
-  if (liveStopwatchInterval) clearInterval(liveStopwatchInterval);
-  
-  const updateElapsed = () => {
-    const el = document.getElementById('live-elapsed-time');
-    if (el && state.liveSession) {
-      const nowStr = getNow();
-      const nowMins = parseTime(nowStr);
-      let diff = nowMins - state.liveSession.sMins;
-      if (diff < 0) diff += 24 * 60; // بررسی عبور از نیمه‌شب
-      
-      let netMins = diff - (state.liveSession.pauseMins || 0);
-      
-      if (state.liveSession.pauseStartMins !== null && state.liveSession.pauseStartMins !== undefined) {
-        let pauseDiff = nowMins - state.liveSession.pauseStartMins;
-        if (pauseDiff < 0) pauseDiff += 24 * 60;
-        netMins -= pauseDiff;
-      }
-      
-      if (netMins < 0) netMins = 0;
-      el.innerHTML = `مدت زمان خالص سپری‌شده: <b>${fmtDur(netMins)}</b>`;
-    }
-  };
-  
-  updateElapsed();
-  liveStopwatchInterval = setInterval(updateElapsed, 1000); // آپدیت آنی و واقعی هر ۱ ثانیه
-}
+export function renderGoals() {
+  const list = document.getElementById('goals-list');
+  const lbl = document.getElementById('goal-month-lbl');
+  if (!list || !lbl) return;
 
-export function updateLiveButton(){
-  const btn = document.getElementById('live-btn');
-  const status = document.getElementById('live-status');
-  if(!btn || !status) return;
-  if(state.liveSession){
-    btn.classList.add('is-running');
-    btn.textContent = 'پایان و ثبت فعالیت';
-    const cat = getCat(state.liveSession.catId);
-    
-    const isPaused = state.liveSession.pauseStartMins !== null && state.liveSession.pauseStartMins !== undefined;
-    const pauseMinsTotal = state.liveSession.pauseMins || 0;
-    
-    // شبیه‌سازی رابط کاربری کامل ثانیه‌شمار با پشتیبانی از دکمه لغو و پاز
-    status.innerHTML = `
-      <div style="margin-bottom: 4px;">در حال ثبت: ${state.liveSession.title}، از ${fmtTime(state.liveSession.sMins)} (${cat.name})</div>
-      <div id="live-elapsed-time" style="color:var(--accent2); font-weight:700; margin-bottom:4px;">در حال محاسبه زمان...</div>
-      ${pauseMinsTotal ? `<div style="color:var(--accent2); font-size:11px;">کل زمان پاز شده: ${pauseMinsTotal} دقیقه</div>` : ''}
-      ${isPaused ? `<div style="color:#f87171; font-size:11px; margin-bottom:4px;">⏳ اکنون در حالت پاز موقت</div>` : ''}
-      <div style="display:flex; gap:6px; justify-content:center; margin-top:6px;">
-        <button id="live-pause-btn" style="
-          padding: 4px 10px;
-          background: var(--surface3);
-          border: 1px solid var(--border2);
-          color: var(--text);
-          border-radius: 6px;
-          font-size: 11px;
-          cursor: pointer;
-          font-family: inherit;
-        ">${isPaused ? '▶ ادامه فعالیت' : '⏸ پاز موقت'}</button>
-        <!-- دکمه انصراف و لغو زنده جدید -->
-        <button id="live-cancel-btn" style="
-          padding: 4px 10px;
-          background: #f8717122;
-          border: 1px solid rgba(248,113,113,0.3);
-          color: #fecaca;
-          border-radius: 6px;
-          font-size: 11px;
-          cursor: pointer;
-          font-family: inherit;
-        ">🚫 لغو و انصراف</button>
-      </div>
-    `;
-    
-    document.getElementById('live-pause-btn').onclick = (e) => {
-      e.stopPropagation();
-      toggleLivePause();
-    };
+  const [y, mo] = state.mapMonth.split('-').map(Number);
+  const monthNames = ['ژانویه','فوریه','مارس','آوریل','مه','ژوئن','ژوئیه','اوت','سپتامبر','اکتبر','نوامبر','دسامبر'];
+  lbl.textContent = monthNames[mo - 1] + ' ' + y;
 
-    document.getElementById('live-cancel-btn').onclick = (e) => {
-      e.stopPropagation();
-      window.cancelLiveSession();
-    };
-    
-    startLiveStopwatch(); // فعال‌سازی شبیه‌ساز کرونومتر
+  list.innerHTML = '';
+
+  const activeGoals = state.goals.filter(g => g.month === state.mapMonth);
+
+  if (activeGoals.length === 0) {
+    list.innerHTML = `<div style="font-size:11px; color:var(--muted); text-align:center; padding: 10px 0;">هیچ هدفی برای این ماه تعریف نکرده‌اید.</div>`;
     return;
   }
-  btn.classList.remove('is-running');
-  btn.textContent = 'شروع / پایان با ساعت سیستم';
-  status.textContent = '';
-  if (liveStopwatchInterval) {
-    clearInterval(liveStopwatchInterval);
-    liveStopwatchInterval = null;
-  }
-}
 
-export function toggleLivePause() {
-  if (!state.liveSession) return;
-  const nowStr = getNow();
-  const nowMins = parseTime(nowStr);
+  activeGoals.forEach(g => {
+    const cat = state.cats.find(c => c.id === g.catId) || { name: 'موضوع حذف‌شده', color: '#9ca3af' };
+    
+    // محاسبه مجموع زمان ثبت‌شده برای اهداف بر اساس دسته‌بندی و عنوان اختصاصی
+    const monthlyEvents = state.events.filter(e => {
+      const matchesMonth = e.date && e.date.startsWith(state.mapMonth);
+      const matchesCat = e.catId === g.catId;
+      let matchesTitle = true;
+      if (g.title && g.title.trim() !== '') {
+        matchesTitle = e.title && e.title.toLowerCase().includes(g.title.toLowerCase());
+      }
+      return matchesMonth && matchesCat && matchesTitle;
+    });
 
-  if (state.liveSession.pauseStartMins === null || state.liveSession.pauseStartMins === undefined) {
-    state.liveSession.pauseStartMins = nowMins;
-  } else {
-    let diff = nowMins - state.liveSession.pauseStartMins;
-    if (diff < 0) diff += 24 * 60;
-    state.liveSession.pauseMins = (state.liveSession.pauseMins || 0) + diff;
-    state.liveSession.pauseStartMins = null;
-  }
-  save('planner_live', state.liveSession); // ذخیره همزمان پاز در لوکال‌استوریج محلی
-  saveCloud();
-  updateLiveButton();
+    const loggedMins = monthlyEvents.reduce((sum, e) => sum + e.durMins, 0);
+    const pct = g.targetMins > 0 ? Math.min(100, Math.round((loggedMins / g.targetMins) * 100)) : 0;
+    const isCompleted = pct >= 100;
+    
+    const loggedStr = loggedMins >= 60 ? (Math.floor(loggedMins/60) + 'h ' + (loggedMins%60) + 'm') : (loggedMins + 'm');
+    const targetStr = g.targetMins >= 60 ? (Math.floor(g.targetMins/60) + 'h ' + (g.targetMins%60) + 'm') : (g.targetMins + 'm');
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s;
+    `;
+
+    if (isCompleted) {
+      el.style.borderColor = 'var(--accent)';
+      el.style.boxShadow = '0 0 10px var(--accent-glow)';
+    }
+
+    const titleDisplay = g.title ? `${escHtml(g.title)} (${cat.name})` : cat.name;
+
+    el.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div>
+          <div style="font-size:13px; font-weight:700; color: ${isCompleted ? 'var(--accent2)' : 'var(--text)'}">
+            ${isCompleted ? '🎉 ' : ''}${titleDisplay}
+          </div>
+          <div style="font-size:11px; color:var(--muted); margin-top:2px;">
+            هدف: ${targetStr} | ثبت‌شده: <b>${loggedStr}</b>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; font-weight:700; color:${isCompleted ? 'var(--accent2)' : 'var(--muted)'}">${pct}٪</span>
+          <button class="btn-del" style="width:24px; height:24px; font-size:11px;" onclick="delGoal('${g.id}')">✕</button>
+        </div>
+      </div>
+      <div class="prog-bg" style="height:8px; border-radius:4px; background: var(--surface3);">
+        <div class="prog-fill" style="background:${isCompleted ? 'linear-gradient(90deg, var(--accent), var(--accent2))' : cat.color}; width:${pct}%"></div>
+      </div>
+      ${isCompleted ? `
+        <div style="font-size:11px; color:var(--accent2); font-weight:700; text-align:center; margin-top:8px;">
+          🌟 فوق‌العاده است! هدف این ماهت رو با موفقیت کامل کردی! 🌟
+        </div>
+      ` : ''}
+    `;
+    list.appendChild(el);
+  });
 }
 
 export function render(){
@@ -597,4 +572,5 @@ export function render(){
   renderActivityMap();
   renderRoutines();
   updateLiveButton();
+  renderGoals(); // رندر لیست اهداف ماهانه
 }
