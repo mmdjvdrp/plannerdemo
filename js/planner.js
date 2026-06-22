@@ -192,7 +192,7 @@ document.getElementById('add-btn').onclick = ()=>{
 
   clearEventForm();
   render();
-  window.switchTab('tab-timeline');
+  window.switchTab('tab-timeline'); // بازگشت اتوماتیک به تب تایم‌لاین
 };
 
 document.getElementById('edit-cancel-btn').onclick = () => {
@@ -225,7 +225,7 @@ window.editEv = function(id) {
   document.getElementById('add-btn').textContent = '✓ ثبت تغییرات فعالیت';
   document.getElementById('edit-cancel-btn').style.display = 'block';
 
-  window.switchTab('tab-add');
+  window.switchTab('tab-add'); // انتقال خودکار به تب ثبت و مدیریت جهت ادیت
 
   setTimeout(() => {
     document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
@@ -314,6 +314,12 @@ if (addRtBtn) {
       b.style.boxShadow = 'none';
     });
 
+    // بستن خودکار پنل روتین پس از ثبت موفقیت‌آمیز
+    const rtCardPanel = document.getElementById('rt-card-panel');
+    if (rtCardPanel) {
+      rtCardPanel.style.display = 'none';
+    }
+
     renderRoutines();
     render();
   };
@@ -370,6 +376,7 @@ function checkAndAddRoutines() {
           state.events.push(ev);
           changed = true;
 
+          // شلیک نوتیفیکیشن همزمان با شروع روتین در پس‌زمینه
           window.showAppNotification(
             `🔔 شروع روتین روزانه`,
             `زمان روتین «${rt.title}» آغاز شده است. (${rt.startTime} تا ${rt.endTime})`
@@ -686,6 +693,36 @@ document.addEventListener('DOMContentLoaded', () => {
       notifyBtn.style.display = 'none';
     }
   }
+
+  // کنترل باز و بسته شدن فرم روتین ثابت
+  const toggleRtBtn = document.getElementById('toggle-rt-form-btn');
+  const rtCardPanel = document.getElementById('rt-card-panel');
+  const closeRtPanel = document.getElementById('close-rt-panel');
+
+  if (toggleRtBtn && rtCardPanel && closeRtPanel) {
+    toggleRtBtn.onclick = () => {
+      rtCardPanel.style.display = 'block';
+      rtCardPanel.scrollIntoView({ behavior: 'smooth' });
+    };
+    closeRtPanel.onclick = () => {
+      rtCardPanel.style.display = 'none';
+    };
+  }
+
+  // کنترل باز و بسته شدن فرم هدف ماهانه
+  const toggleGoalBtn = document.getElementById('toggle-goal-form-btn');
+  const goalCardPanel = document.getElementById('goal-card-panel');
+  const closeGoalPanel = document.getElementById('close-goal-panel');
+
+  if (toggleGoalBtn && goalCardPanel && closeGoalPanel) {
+    toggleGoalBtn.onclick = () => {
+      goalCardPanel.style.display = 'block';
+      goalCardPanel.scrollIntoView({ behavior: 'smooth' });
+    };
+    closeGoalPanel.onclick = () => {
+      goalCardPanel.style.display = 'none';
+    };
+  }
 });
 
 // مدیریت و ثبت هدف ماهانه جدید
@@ -721,6 +758,10 @@ if (addGoalBtn) {
 
     document.getElementById('goal-title').value = '';
     document.getElementById('goal-target').value = '';
+
+    // بستن خودکار تب هدف پس از ذخیره موفق
+    const goalCardPanel = document.getElementById('goal-card-panel');
+    if (goalCardPanel) goalCardPanel.style.display = 'none';
 
     render();
     alert('هدف ماهانه شما با موفقیت ثبت شد و از بخش تب «گزارش‌ها» قابل رهگیری است!');
