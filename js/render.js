@@ -14,11 +14,10 @@ function getCat(id){
   return state.cats.find(c => c.id === id) || {name:'موضوع حذف‌شده', color:'#9ca3af'}; 
 }
 
-export function renderCats(){
-  const sel=document.getElementById('cat-select');
-  const mapSel=document.getElementById('map-cat-select');
-  const manager=document.getElementById('cat-manager');
-  if(!sel || !mapSel || !manager) return;
+export function updateLiveButton(){
+  const btn = document.getElementById('live-btn');
+  const status = document.getElementById('live-status');
+  if(!btn || !status) return;
 
   const current=sel.value;
   const mapCurrent=mapSel.value;
