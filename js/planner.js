@@ -19,7 +19,7 @@ window.switchTab = function(tabId) {
   if (targetSection) targetSection.classList.add('active');
 };
 
-// تابع سراسری ارسال نوتیفیکیشن
+// تابع سراسری ارسال نوتیفیکیشن سازگار با دسکتاپ و PWA موبایل
 window.showAppNotification = function(title, body) {
   if (!("Notification" in window)) return;
   if (Notification.permission !== "granted") return;
@@ -31,7 +31,6 @@ window.showAppNotification = function(title, body) {
     badge: "./icons/icon-192.png"
   };
 
-  // استفاده از Service Worker برای ارسال نوتیفیکیشن سازگار با موبایل
   if (navigator.serviceWorker && navigator.serviceWorker.controller) {
     navigator.serviceWorker.ready.then(reg => {
       reg.showNotification(title, options);
@@ -193,7 +192,7 @@ document.getElementById('add-btn').onclick = ()=>{
 
   clearEventForm();
   render();
-  window.switchTab('tab-timeline'); // بازگشت داینامیک به تایم‌لاین پس از ثبت ویرایش/افزودن
+  window.switchTab('tab-timeline'); // بازگشت اتوماتیک به تب تایم‌لاین
 };
 
 document.getElementById('edit-cancel-btn').onclick = () => {
@@ -212,7 +211,6 @@ window.delEv = function(id) {
   render();
 };
 
-// حل مشکل رفتن اتوماتیک به تب مدیریت هنگام شروع ویرایش
 window.editEv = function(id) {
   const ev = state.events.find(e => e.id === id);
   if (!ev) return;
@@ -227,8 +225,7 @@ window.editEv = function(id) {
   document.getElementById('add-btn').textContent = '✓ ثبت تغییرات فعالیت';
   document.getElementById('edit-cancel-btn').style.display = 'block';
 
-  // انتقال خودکار به تب ثبت و مدیریت
-  window.switchTab('tab-add');
+  window.switchTab('tab-add'); // انتقال خودکار به تب ثبت و مدیریت جهت ادیت
 
   setTimeout(() => {
     document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
@@ -342,7 +339,6 @@ document.getElementById('map-next').onclick = () => {
 };
 document.getElementById('map-cat-select').onchange = () => render();
 
-// بررسی خودکار روتین‌ها و ارسال اعلان
 function checkAndAddRoutines() {
   const now = new Date();
   const jsDay = now.getDay(); 
@@ -374,7 +370,7 @@ function checkAndAddRoutines() {
           state.events.push(ev);
           changed = true;
 
-          // ارسال اعلان هوشمند در زمان شروع خودکار روتین
+          // شلیک نوتیفیکیشن همزمان با شروع روتین در پس‌زمینه
           window.showAppNotification(
             `🔔 شروع روتین روزانه`,
             `زمان روتین «${rt.title}» آغاز شده است. (${rt.startTime} تا ${rt.endTime})`
@@ -482,10 +478,12 @@ async function handleUserSession(session) {
       localStorage.removeItem('planner_cats');
       localStorage.removeItem('planner_live');
       localStorage.removeItem('planner_routines');
+      localStorage.removeItem('planner_goals');
       state.events = [];
       state.cats = [];
       state.liveSession = null;
       state.routines = [];
+      state.goals = [];
 
       await loadCloud();
 
@@ -646,8 +644,7 @@ window.setupViewTabs = function() {
 };
 window.setupViewTabs();
 
-// سیستم تب‌های ناوبری اصلی و دکمه فعال‌سازی اعلان‌ها
-// سیستم تب‌های ناوبری اصلی، مدیریت تم‌ها و دکمه فعال‌سازی اعلان‌ها
+// سیستم تب‌های ناوبری اصلی، منوی تم‌ها و ثبت اهداف
 document.addEventListener('DOMContentLoaded', () => {
   const navButtons = document.querySelectorAll('.nav-btn');
   const tabSections = document.querySelectorAll('.tab-section');
@@ -660,14 +657,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // --- بخش اصلاح‌شده: اعمال و ذخیره تم منتخب کاربر ---
+  // منوی تغییر پوسته زنده
   const themeSelect = document.getElementById('theme-select');
   if (themeSelect) {
     themeSelect.onchange = () => {
-      state.theme = themeSelect.value; // به‌روزرسانی وضعیت سراسری برنامه
-      save('planner_theme', state.theme); // ذخیره در حافظه محلی مرورگر (Local Storage)
-      saveCloud(); // همگام‌سازی و ذخیره در دیتابیس ابری Supabase
-      applyTheme(); // اعمال آنی استایل‌های تم روی بدنه وب‌سایت
+      state.theme = themeSelect.value;
+      save('planner_theme', state.theme);
+      saveCloud();
+      applyTheme();
     };
   }
 
@@ -676,7 +673,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (notifyBtn) {
     if ("Notification" in window) {
       if (Notification.permission === 'granted') {
-        notifyBtn.style.display = 'none'; // مخفی کردن اگر از قبل فعال باشد
+        notifyBtn.style.display = 'none';
       }
       notifyBtn.onclick = () => {
         Notification.requestPermission().then(permission => {
@@ -686,10 +683,65 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       };
-    }
-    else {
-      notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
+    } else {
+      notifyBtn.style.display = 'none';
     }
   }
-);
-  
+});
+
+// مدیریت و ثبت هدف ماهانه جدید
+const addGoalBtn = document.getElementById('add-goal-btn');
+if (addGoalBtn) {
+  addGoalBtn.onclick = function() {
+    const title = document.getElementById('goal-title').value.trim();
+    const catId = document.getElementById('goal-cat-select').value;
+    const targetRaw = document.getElementById('goal-target').value.trim();
+
+    if (!catId) {
+      alert('لطفاً ابتدا یک موضوع انتخاب کنید.');
+      return;
+    }
+
+    const targetMins = parseInt(targetRaw, 10);
+    if (isNaN(targetMins) || targetMins <= 0) {
+      alert('لطفاً یک مدت زمان معتبر به دقیقه وارد کنید.');
+      return;
+    }
+
+    const newGoal = {
+      id: Date.now().toString(),
+      title: title,
+      catId: catId,
+      targetMins: targetMins,
+      month: state.mapMonth // ثبت بر اساس ماه انتخابی جاری در برنامه
+    };
+
+    state.goals.push(newGoal);
+    save('planner_goals', state.goals);
+    saveCloud();
+
+    // ریست فیلدهای فرم هدف
+    document.getElementById('goal-title').value = '';
+    document.getElementById('goal-target').value = '';
+
+    render();
+    alert('هدف ماهانه شما با موفقیت ثبت شد و از بخش تب «گزارش‌ها» قابل رهگیری است!');
+  };
+}
+
+// جلوگیری از وارد کردن کاراکترهای غیرعددی در مقدار زمان هدف
+const goalTargetInp = document.getElementById('goal-target');
+if (goalTargetInp) {
+  goalTargetInp.addEventListener('input', function() {
+    this.value = this.value.replace(/[^\d]/g, '');
+  });
+}
+
+// تابع سراسری حذف هدف
+window.delGoal = function(id) {
+  if (!confirm('آیا می‌خواهید این هدف ماهانه حذف شود؟')) return;
+  state.goals = state.goals.filter(g => g.id !== id);
+  save('planner_goals', state.goals);
+  saveCloud();
+  render();
+};
