@@ -192,7 +192,7 @@ document.getElementById('add-btn').onclick = ()=>{
 
   clearEventForm();
   render();
-  window.switchTab('tab-timeline'); // بازگشت اتوماتیک به تب تایم‌لاین
+  window.switchTab('tab-timeline');
 };
 
 document.getElementById('edit-cancel-btn').onclick = () => {
@@ -225,7 +225,7 @@ window.editEv = function(id) {
   document.getElementById('add-btn').textContent = '✓ ثبت تغییرات فعالیت';
   document.getElementById('edit-cancel-btn').style.display = 'block';
 
-  window.switchTab('tab-add'); // انتقال خودکار به تب ثبت و مدیریت جهت ادیت
+  window.switchTab('tab-add');
 
   setTimeout(() => {
     document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
@@ -370,7 +370,6 @@ function checkAndAddRoutines() {
           state.events.push(ev);
           changed = true;
 
-          // شلیک نوتیفیکیشن همزمان با شروع روتین در پس‌زمینه
           window.showAppNotification(
             `🔔 شروع روتین روزانه`,
             `زمان روتین «${rt.title}» آغاز شده است. (${rt.startTime} تا ${rt.endTime})`
@@ -713,14 +712,13 @@ if (addGoalBtn) {
       title: title,
       catId: catId,
       targetMins: targetMins,
-      month: state.mapMonth // ثبت بر اساس ماه انتخابی جاری در برنامه
+      month: state.mapMonth
     };
 
     state.goals.push(newGoal);
     save('planner_goals', state.goals);
     saveCloud();
 
-    // ریست فیلدهای فرم هدف
     document.getElementById('goal-title').value = '';
     document.getElementById('goal-target').value = '';
 
