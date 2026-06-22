@@ -43,21 +43,45 @@ export function renderCats(){
 
     const item=document.createElement('div');
     item.className='cat-item';
+    item.style.cursor = 'pointer'; // نمایش نشانگر دست برای قابلیت کلیک
     item.style.setProperty('--cat-color', c.color);
+    
+    // مشخص کردن دسته فعال فعلی به صورت بصری
+    if (c.id === current) {
+      item.classList.add('selected');
+    }
+
     item.innerHTML=`
       <span class="cat-swatch"></span>
       <span class="cat-name">${escHtml(c.name)}</span>
       <input class="cat-color-edit" type="color" value="${c.color}" aria-label="تغییر رنگ ${escHtml(c.name)}">
       <button class="cat-delete" type="button" title="حذف موضوع">×</button>
     `;
+
+    // سیستم انتخاب سریع با کلیک بر روی آیتم
+    item.onclick = (e) => {
+      // اگر روی دکمه حذف یا پالت تغییر رنگ کلیک شد، عملیات انتخاب صورت نگیرد
+      if (e.target.classList.contains('cat-color-edit') || e.target.classList.contains('cat-delete')) {
+        return;
+      }
+      // تنظیم مقدار انتخابگر فرم و نقشه به این موضوع
+      sel.value = c.id;
+      mapSel.value = c.id;
+      
+      // تغییر استایل موضوع انتخاب‌شده به شکل آنی
+      document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('selected'));
+      item.classList.add('selected');
+      
+      // اجرای رندر نقشه بدون فوکوس‌زدایی مجدد فرم
+      renderActivityMap();
+    };
+
     const colorInput=item.querySelector('.cat-color-edit');
-    // oninput: فقط پیش‌نمایش زنده رنگ بدون rebuild کردن DOM
     colorInput.oninput=()=>{
       item.style.setProperty('--cat-color', colorInput.value);
       const swatch = item.querySelector('.cat-swatch');
       if(swatch) swatch.style.background = colorInput.value;
     };
-    // onchange: ذخیره و رندر فقط وقتی picker بسته شد (انتخاب نهایی)
     colorInput.onchange=()=>{
       c.color=colorInput.value;
       item.style.setProperty('--cat-color', c.color);
@@ -65,7 +89,13 @@ export function renderCats(){
       saveCloud();
       render();
     };
-    item.querySelector('.cat-delete').onclick=()=> window.delCat(c.id);
+
+    const delBtn = item.querySelector('.cat-delete');
+    delBtn.onclick = (e) => {
+      e.stopPropagation(); // جلوگیری از فعال شدن رویداد کلیک والد (انتخاب دسته) در هنگام حذف
+      window.delCat(c.id);
+    };
+
     manager.appendChild(item);
   });
   if(current && state.cats.some(c=>c.id===current)) sel.value=current;
