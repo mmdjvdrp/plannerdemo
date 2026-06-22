@@ -492,3 +492,100 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 3px; }
+/* --- استایل‌های سیستم تب --- */
+.tab-section {
+  display: none;
+  animation: fadeIn 0.3s ease;
+}
+.tab-section.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.app-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: var(--surface);
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+}
+
+.nav-btn {
+  flex: 1;
+  padding: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 10px;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.nav-btn:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.nav-btn.active {
+  background: var(--accent-glow);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.nav-icon {
+  font-size: 18px;
+}
+
+/* --- بهینه‌سازی مخصوص موبایل (گوشی) --- */
+@media (max-width: 768px) {
+  /* نوار ناوبری پایین صفحه (Bottom Navigation) شبیه اپلیکیشن‌های نیتیو */
+  .app-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    margin-bottom: 0;
+    border-radius: 20px 20px 0 0;
+    padding: 10px 15px 20px 15px; /* پدینگ بیشتر در پایین برای گوشی‌های جدید */
+    z-index: 1000;
+    box-shadow: 0 -5px 20px rgba(0,0,0,0.3);
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+  }
+
+  .nav-btn {
+    flex-direction: column; /* آیکون بالای متن قرار بگیرد */
+    gap: 4px;
+    font-size: 11px;
+    padding: 8px;
+  }
+
+  .nav-icon {
+    font-size: 22px;
+  }
+
+  /* جلوگیری از رفتن محتوا به زیر منوی پایینی */
+  body {
+    padding-bottom: 90px;
+  }
+  
+  /* بزرگتر کردن دکمه‌ها و فیلدها برای لمس راحت‌تر با انگشت (Touch Target) */
+  input[type=text], select, .btn-primary, .btn-live {
+    padding: 14px;
+    font-size: 15px;
+  }
+}
