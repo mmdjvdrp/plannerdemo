@@ -647,6 +647,7 @@ window.setupViewTabs = function() {
 window.setupViewTabs();
 
 // سیستم تب‌های ناوبری اصلی و دکمه فعال‌سازی اعلان‌ها
+// سیستم تب‌های ناوبری اصلی، مدیریت تم‌ها و دکمه فعال‌سازی اعلان‌ها
 document.addEventListener('DOMContentLoaded', () => {
   const navButtons = document.querySelectorAll('.nav-btn');
   const tabSections = document.querySelectorAll('.tab-section');
@@ -658,6 +659,17 @@ document.addEventListener('DOMContentLoaded', () => {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
+
+  // --- بخش اصلاح‌شده: اعمال و ذخیره تم منتخب کاربر ---
+  const themeSelect = document.getElementById('theme-select');
+  if (themeSelect) {
+    themeSelect.onchange = () => {
+      state.theme = themeSelect.value; // به‌روزرسانی وضعیت سراسری برنامه
+      save('planner_theme', state.theme); // ذخیره در حافظه محلی مرورگر (Local Storage)
+      saveCloud(); // همگام‌سازی و ذخیره در دیتابیس ابری Supabase
+      applyTheme(); // اعمال آنی استایل‌های تم روی بدنه وب‌سایت
+    };
+  }
 
   // کنترل و اتصال دکمه درخواست دسترسی به اعلان‌ها
   const notifyBtn = document.getElementById('notify-enable-btn');
@@ -674,6 +686,11 @@ document.addEventListener('DOMContentLoaded', () => {
           }
         });
       };
+    } else {
+      notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
+    }
+  }
+});
     } else {
       notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
     }
