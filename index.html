@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
+  <!-- آیکون برنامه در بالای مرورگر و وب مانیفست -->
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png">
   <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -12,11 +13,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
 
+<!-- استایل واکنش‌گرا و جدول هفتگی مدارس منحصراً برای دستگاه‌های موبایل و دسکتاپ -->
 <style>
 @media(max-width: 768px) {
   body {
     padding: 12px 8px;
-    padding-bottom: 90px;
+    padding-bottom: 90px; /* فضای باز برای منوی ناوبری پایین صفحه */
   }
   .header {
     flex-direction: column;
@@ -24,7 +26,9 @@
     text-align: center;
     gap: 14px;
   }
-  .logo { font-size: 22px; }
+  .logo {
+    font-size: 22px;
+  }
   .date-nav {
     display: flex;
     flex-wrap: wrap;
@@ -49,21 +53,64 @@
     padding: 14px;
     border-radius: 12px;
   }
-  
-  input[type=text], select, .btn-primary, .btn-live {
-    padding: 14px;
-    font-size: 16px !important;
+  .card-title {
+    font-size: 10px;
+    margin-bottom: 12px;
+  }
+  .activity-map {
+    gap: 4px;
+  }
+  .map-day {
+    border-radius: 6px;
+    font-size: 8px;
+  }
+  .map-day-num {
+    top: 2px;
+    inset-inline-start: 3px;
+    font-size: 7px;
+  }
+  .tl-wrap {
+    padding-right: 12px;
+    margin-right: 4px;
+  }
+  .tl-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .tl-title {
+    font-size: 13px;
+  }
+  .tl-meta {
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .tl-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+  .tl-time {
+    font-size: 10px;
+    padding: 1px 5px;
+  }
+  .tl-dur {
+    font-size: 10px;
+  }
+  .btn-del {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+    border-radius: 6px;
+  }
+  /* ریسپانسیو کردن جدول برنامه هفتگی کلاس درس */
+  .timetable-grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .timetable-day-col {
+    min-height: 100px !important;
   }
 
-  .activity-map { gap: 4px; }
-  .map-day { border-radius: 6px; font-size: 8px; }
-  .map-day-num { top: 2px; inset-inline-start: 3px; font-size: 7px; }
-  .tl-wrap { padding-right: 12px; margin-right: 4px; }
-  .tl-item { padding: 8px 10px; gap: 8px; }
-  .tl-title { font-size: 13px; }
-  .timetable-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
-  .timetable-day-col { min-height: 100px !important; }
-
+  /* منوی ناوبری اپلیکیشن برای موبایل */
   .app-nav {
     position: fixed;
     bottom: 0;
@@ -86,8 +133,15 @@
     padding: 8px;
   }
   .nav-icon { font-size: 22px; }
+
+  /* جلوگیری از زوم خودکار مرورگر در iOS */
+  input[type=text], select, .btn-primary, .btn-live {
+    padding: 14px;
+    font-size: 16px !important;
+  }
 }
 
+/* استایل‌های سیستم تب */
 .tab-section {
   display: none;
   animation: fadeIn 0.3s ease;
@@ -98,6 +152,7 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* منوی ناوبری اپلیکیشن در دسکتاپ */
 @media(min-width: 769px) {
   .app-nav {
     display: flex;
@@ -145,7 +200,7 @@
       <div style="display:flex; align-items:center; gap:8px">
         <span id="welcome-msg" style="font-size:13px; color:var(--muted)"></span>
         
-        <!-- دکمه فعال‌سازی اعلان جدید -->
+        <!-- دکمه فعال‌سازی اعلان‌ها -->
         <button id="notify-enable-btn" style="
           padding:6px 12px;
           border-radius:8px;
@@ -157,7 +212,16 @@
           font-size:11px;
         ">🔔 اعلان‌ها</button>
 
-        <button id="logout-btn" style="padding:6px 14px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-family:inherit; font-size:12px;">خروج</button>
+        <button id="logout-btn" style="
+          padding:6px 14px;
+          border-radius:8px;
+          border:1px solid var(--border2);
+          background:var(--surface2);
+          color:var(--muted);
+          cursor:pointer;
+          font-family:Vazirmatn,sans-serif;
+          font-size:12px;
+        ">خروج</button>
       </div>
       <button id="prev-day" title="روز قبل">&#8249;</button>
       <div id="date-label"></div>
@@ -243,6 +307,7 @@
           </div>
           <div class="err-msg" id="time-err">⚠ فرمت صحیح: HH:MM مثلاً ۱۴:۳۰</div>
         </div>
+        <!-- فیلد وقفه/پاز زمان دستی (بدون تکرار) -->
         <div class="form-group">
           <label>مدت زمان وقفه / پاز (دقیقه - اختیاری)</label>
           <input type="text" id="pause-time" inputmode="numeric" placeholder="مثلاً: ۳۰ (دقیقه)" maxlength="4" autocomplete="off">
@@ -282,11 +347,29 @@
         <button class="btn-primary" id="add-rt-btn">+ ذخیره روتین</button>
         <div id="rt-list" style="margin-top: 15px; display: flex; flex-direction: column; gap: 6px;"></div>
       </div>
+
+      <!-- کارت: تعریف هدف ماهانه جدید -->
+      <div class="card" style="margin-top: 15px;">
+        <div class="card-title">تعریف هدف ماهانه جدید</div>
+        <div class="form-group">
+          <label>عنوان تمرین / فعالیت اختصاصی (اختیاری)</label>
+          <input type="text" id="goal-title" placeholder="مثلاً: وال سیت (اگر خالی بگذارید کل دسته را شامل می‌شود)">
+        </div>
+        <div class="form-group">
+          <label>موضوع (دسته‌بندی)</label>
+          <select id="goal-cat-select"></select>
+        </div>
+        <div class="form-group">
+          <label>مدت زمان هدف (به دقیقه)</label>
+          <input type="text" id="goal-target" inputmode="numeric" placeholder="مثلاً: ۳۰ (دقیقه)" maxlength="5" autocomplete="off">
+        </div>
+        <button class="btn-primary" id="add-goal-btn">+ ثبت هدف ماهانه</button>
+      </div>
     </div>
 
     <!-- ================= تب 3: گزارش‌ها ================= -->
     <div id="tab-reports" class="tab-section">
-      <!-- Report -->
+      <!-- Report (داینامیک همراه با دکمه تایید بازه) -->
       <div class="card">
         <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
           <span>گزارش دوره‌ای موضوعات</span>
@@ -294,14 +377,26 @@
             <span style="font-size:11px;">بازه:</span>
             <input type="text" id="report-days" inputmode="numeric" value="7" style="width: 36px; text-align: center; padding: 4px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border2); color: var(--text); border-radius: 6px;">
             <span style="font-size:11px;">روزه</span>
-            <button id="report-confirm-btn" style="padding: 4px 10px; background: var(--accent); color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer; font-family: inherit; transition: opacity 0.15s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">تایید</button>
+            <!-- دکمه تایید جدید -->
+            <button id="report-confirm-btn" style="
+              padding: 4px 10px;
+              background: var(--accent);
+              color: white;
+              border: none;
+              border-radius: 6px;
+              font-size: 11px;
+              cursor: pointer;
+              font-family: inherit;
+              transition: opacity 0.15s;
+            " onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">تایید</button>
           </div>
         </div>
-        <div id="report-err" class="err-msg" style="margin-bottom: 10px; display: none; color: #f87171; font-size: 11px;">⚠ مقدار باید از اعداد انگلیسی باشد</div>
+        <!-- هشدار خطا برای اعداد فارسی و حروف نامعتبر -->
+        <div id="report-err" class="err-msg" style="margin-bottom: 10px; display: none; color: #f87171; font-size: 11px;">⚠ این مقدار غلطه و باید از اعداد انگلیسی استفاده کنی</div>
         <div id="report-grid"></div>
         <div class="total-line" id="total-line">مجموع گزارش: <span>۰ ساعت</span></div>
       </div>
-
+      
       <!-- Activity Map -->
       <div class="card">
         <div class="card-title">نقشه ماهانه موضوع</div>
@@ -316,11 +411,18 @@
         <div id="activity-map" class="activity-map"></div>
         <div class="map-summary" id="map-summary"></div>
       </div>
-    </div>
 
+      <!-- کارت: نمایش و رهگیری اهداف ماهانه -->
+      <div class="card" style="margin-top: 15px;">
+        <div class="card-title">پیشرفت اهداف این ماه (<span id="goal-month-lbl" style="color:var(--accent2)"></span>)</div>
+        <div id="goals-list" style="display:flex; flex-direction:column; gap:12px;"></div>
+      </div>
+    </div>
   </div>
+
 </div>
 
+<!-- اتصال به اسکریپت ماژولار و بازسازی شده برنامه -->
 <script type="module" src="./js/planner.js"></script>
 </body>
 </html>
