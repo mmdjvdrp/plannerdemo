@@ -4,7 +4,43 @@ import { state, save, saveCloud, loadCloud } from "./storage.js";
 import { getNow, parseTime, fmtTime, pad, getLocalDateStr } from "./helpers.js";
 import { render, applyTheme, renderRoutines, updateLiveButton } from "./render.js";
 
-// اتصال رویداد جابجایی پویای تقویم هفتگی به حوزه سراسری جهت رفع باگ پرش تاریخ
+// تابع سراسری تغییر تب به صورت داینامیک
+window.switchTab = function(tabId) {
+  const navButtons = document.querySelectorAll('.nav-btn');
+  const tabSections = document.querySelectorAll('.tab-section');
+  
+  navButtons.forEach(b => b.classList.remove('active'));
+  tabSections.forEach(s => s.classList.remove('active'));
+
+  const targetBtn = document.querySelector(`.nav-btn[data-tab="${tabId}"]`);
+  const targetSection = document.getElementById(tabId);
+
+  if (targetBtn) targetBtn.classList.add('active');
+  if (targetSection) targetSection.classList.add('active');
+};
+
+// تابع سراسری ارسال نوتیفیکیشن
+window.showAppNotification = function(title, body) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+
+  const options = {
+    body: body,
+    icon: "./icons/icon-192.png",
+    vibrate: [200, 100, 200],
+    badge: "./icons/icon-192.png"
+  };
+
+  // استفاده از Service Worker برای ارسال نوتیفیکیشن سازگار با موبایل
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.showNotification(title, options);
+    });
+  } else {
+    new Notification(title, options);
+  }
+};
+
 window.navigateToDay = function(dateStr) {
   state.curDate = dateStr;
   state.activeView = 'daily';
@@ -28,7 +64,6 @@ function shiftDay(n){
   render();
 }
 
-// تابع اعتبارسنجی فیلدهای زمان در کنترلر
 function setupTimeInput(inp){
   if(!inp) return;
   inp.addEventListener('input', function(){
@@ -86,7 +121,6 @@ function createEvent({title, catId, stRaw, enRaw, pauseRaw = "0", date=state.cur
     return false;
   }
 
-  // بررسی عدم تداخل و همپوشانی زمانی
   const dayEvents = state.events.filter(e => e.date === date && e.id !== targetId);
   for (let ext of dayEvents) {
     let start1 = sMins;
@@ -159,6 +193,7 @@ document.getElementById('add-btn').onclick = ()=>{
 
   clearEventForm();
   render();
+  window.switchTab('tab-timeline'); // بازگشت داینامیک به تایم‌لاین پس از ثبت ویرایش/افزودن
 };
 
 document.getElementById('edit-cancel-btn').onclick = () => {
@@ -166,9 +201,9 @@ document.getElementById('edit-cancel-btn').onclick = () => {
   document.getElementById('add-btn').textContent = '+ افزودن به تایم‌لاین';
   document.getElementById('edit-cancel-btn').style.display = 'none';
   clearEventForm();
+  window.switchTab('tab-timeline');
 };
 
-// متد سراسری حذف فعالیت‌ها
 window.delEv = function(id) {
   if(!confirm('این فعالیت حذف شود؟')) return;
   state.events = state.events.filter(e => e.id !== id);
@@ -177,6 +212,7 @@ window.delEv = function(id) {
   render();
 };
 
+// حل مشکل رفتن اتوماتیک به تب مدیریت هنگام شروع ویرایش
 window.editEv = function(id) {
   const ev = state.events.find(e => e.id === id);
   if (!ev) return;
@@ -191,7 +227,12 @@ window.editEv = function(id) {
   document.getElementById('add-btn').textContent = '✓ ثبت تغییرات فعالیت';
   document.getElementById('edit-cancel-btn').style.display = 'block';
 
-  document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  // انتقال خودکار به تب ثبت و مدیریت
+  window.switchTab('tab-add');
+
+  setTimeout(() => {
+    document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
+  }, 100);
 };
 
 window.delCat = function(id) {
@@ -208,7 +249,6 @@ window.delCat = function(id) {
   render();
 };
 
-// کنترل و ثبت روتین‌های هفتگی
 const dayBtns = document.querySelectorAll('.rt-day-btn');
 dayBtns.forEach(btn => {
   btn.onclick = function() {
@@ -266,7 +306,6 @@ if (addRtBtn) {
     save('planner_routines', state.routines);
     saveCloud();
     
-    // ریست فرم روتین بعد از ثبت
     document.getElementById('rt-title').value = '';
     document.getElementById('rt-start').value = '';
     document.getElementById('rt-end').value = '';
@@ -283,11 +322,10 @@ if (addRtBtn) {
   };
 }
 
-// گوش دادن و اتصال دکمه‌های ناوبری تاریخ
 document.getElementById('prev-day').onclick = () => shiftDay(-1);
 document.getElementById('next-day').onclick = () => shiftDay(1);
 document.getElementById('btn-today').onclick = () => {
-  state.curDate = getLocalDateStr(); // تصحیح نهایی دکمه امروز متناسب با ساعت محلی سیستم
+  state.curDate = getLocalDateStr();
   render();
 };
 document.getElementById('map-prev').onclick = () => {
@@ -304,7 +342,7 @@ document.getElementById('map-next').onclick = () => {
 };
 document.getElementById('map-cat-select').onchange = () => render();
 
-// بررسی خودکار روتین‌ها و افزودن به تایم‌لاین
+// بررسی خودکار روتین‌ها و ارسال اعلان
 function checkAndAddRoutines() {
   const now = new Date();
   const jsDay = now.getDay(); 
@@ -335,6 +373,12 @@ function checkAndAddRoutines() {
           };
           state.events.push(ev);
           changed = true;
+
+          // ارسال اعلان هوشمند در زمان شروع خودکار روتین
+          window.showAppNotification(
+            `🔔 شروع روتین روزانه`,
+            `زمان روتین «${rt.title}» آغاز شده است. (${rt.startTime} تا ${rt.endTime})`
+          );
         }
       }
     }
@@ -347,7 +391,6 @@ function checkAndAddRoutines() {
   }
 }
 
-// چک کردن روتین‌ها به صورت دوره‌ای هر ۳۰ ثانیه
 setInterval(checkAndAddRoutines, 30000);
 
 setupTimeInput(document.getElementById('start-time'));
@@ -362,7 +405,6 @@ if (pauseInp) {
   });
 }
 
-// رفع تداخل دکمه‌های «الان» همراه با ارسال متد تریگر جهت پاک کردن کادر قرمز خطا
 document.getElementById('btn-now-s').onclick = ()=>{
   const inp = document.getElementById('start-time');
   if (inp) {
@@ -381,7 +423,6 @@ document.getElementById('btn-now-e').onclick = ()=>{
   }
 };
 
-// اعتبارسنجی گزارش دوره‌ای
 const reportConfirmBtn = document.getElementById('report-confirm-btn');
 if (reportConfirmBtn) {
   reportConfirmBtn.onclick = function() {
@@ -398,7 +439,6 @@ if (reportConfirmBtn) {
   };
 }
 
-// متصل کردن توابع سراسری ویرایش و حذف روتین
 window.delRoutine = function(id) {
   if (!confirm('این روتین حذف شود؟')) return;
   state.routines = state.routines.filter(r => r.id !== id);
@@ -407,24 +447,6 @@ window.delRoutine = function(id) {
   render();
 };
 
-window.editEv = function(id) {
-  const ev = state.events.find(e => e.id === id);
-  if (!ev) return;
-
-  state.editingEventId = id;
-  document.getElementById('act-title').value = ev.title === (state.cats.find(c=>c.id===ev.catId)?.name || '') ? '' : ev.title;
-  document.getElementById('cat-select').value = ev.catId;
-  document.getElementById('start-time').value = fmtTime(ev.sMins);
-  document.getElementById('end-time').value = fmtTime(ev.eMins);
-  document.getElementById('pause-time').value = ev.pauseMins || '';
-
-  document.getElementById('add-btn').textContent = '✓ ثبت تغییرات فعالیت';
-  document.getElementById('edit-cancel-btn').style.display = 'block';
-
-  document.querySelector('.card').scrollIntoView({ behavior: 'smooth' });
-};
-
-// واگذاری رویداد خروج و احراز هویت بدون مسدودی قفل
 async function handleUserSession(session) {
   const user = session?.user;
   if (!user) {
@@ -512,7 +534,6 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// کنترل کلیک دکمه لایو تایمر سیستم
 document.getElementById('live-btn').onclick=()=>{
   if(!state.liveSession){
     const title=document.getElementById('act-title').value.trim();
@@ -529,7 +550,7 @@ document.getElementById('live-btn').onclick=()=>{
     const sMins=parseTime(now);
     
     state.liveSession={title: finalTitle, catId, date:state.curDate, sMins, pauseMins: 0, pauseStartMins: null};
-    save('planner_live', state.liveSession); // ذخیره همزمان در حافظه محلی مرورگر
+    save('planner_live', state.liveSession);
     saveCloud();
     document.getElementById('start-time').value=now;
     document.getElementById('end-time').value='';
@@ -558,51 +579,46 @@ document.getElementById('live-btn').onclick=()=>{
   if(!ok) return;
   const liveDate = state.liveSession.date;
   state.liveSession=null;
-  save('planner_live', null); // حذف همزمان لایو از حافظه محلی مرورگر
+  save('planner_live', null);
   saveCloud();
   clearEventForm();
   
-  // پرش آنی و اتوماتیک تقویم به تاریخی که لایو در آن ثبت شد
   state.curDate = liveDate;
   
   render();
   updateLiveButton();
 };
 
-// کنترلر لغو و حذف فعالیت زنده جهت رفع باگ عدم واکنش انصراف
 window.cancelLiveSession = function() {
   if (!confirm('آیا از لغو و حذف زمان این فعالیت زنده اطمینان دارید؟ (هیچ فعالیتی ثبت نخواهد شد)')) return;
   state.liveSession = null;
-  save('planner_live', null); // حذف همزمان لایو از لوکال‌استوریج محلی
+  save('planner_live', null);
   saveCloud();
   clearEventForm();
   render();
 };
 
-// باز/بسته کردن فرم اضافه کردن موضوع جدید
 document.getElementById('toggle-cat').onclick = ()=>{
   const box = document.getElementById('new-cat-box');
   if(!box) return;
   box.style.display = box.style.display === 'block' ? 'none' : 'block';
 };
 
-// ثبت موضوع جدید به دیتابیس ابری سوپابیس
 document.getElementById('save-cat').onclick = ()=>{
   const name=document.getElementById('new-cat-name').value.trim();
   const color=document.getElementById('new-cat-color').value;
   if(!name){ alert('نام دسته‌بندی را وارد کنید'); return; }
   const nc={id:'c'+Date.now(), name, color};
   
-  // فیکس شده: همگام‌سازی مراجع با state سراسری به جای متغیرهای محلی
   state.cats.push(nc);
   save('planner_cats', state.cats);
   saveCloud();
   
   document.getElementById('new-cat-name').value='';
   document.getElementById('new-cat-box').style.display='none';
-  render(); // اول render، بعد set مقدار تا reset نشه
+  render();
   document.getElementById('cat-select').value=nc.id;
-  document.getElementById('map-cat-select').value=nc.id; // رندر سراسری به جای فراخوانی renderCats مفقود شده
+  document.getElementById('map-cat-select').value=nc.id;
 };
 
 window.setupViewTabs = function() {
@@ -629,25 +645,37 @@ window.setupViewTabs = function() {
   };
 };
 window.setupViewTabs();
-// سیستم تب‌ها (Navigation Tabs)
+
+// سیستم تب‌های ناوبری اصلی و دکمه فعال‌سازی اعلان‌ها
 document.addEventListener('DOMContentLoaded', () => {
   const navButtons = document.querySelectorAll('.nav-btn');
   const tabSections = document.querySelectorAll('.tab-section');
 
   navButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      // 1. حذف کلاس active از همه دکمه‌ها و تب‌ها
-      navButtons.forEach(b => b.classList.remove('active'));
-      tabSections.forEach(s => s.classList.remove('active'));
-
-      // 2. اضافه کردن کلاس active به دکمه کلیک شده و تب مربوطه
-      btn.classList.add('active');
       const targetId = btn.getAttribute('data-tab');
-      document.getElementById(targetId).classList.add('active');
-      
-      // 3. اسکرول نرم به بالای صفحه
+      window.switchTab(targetId);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     });
   });
-});
 
+  // کنترل و اتصال دکمه درخواست دسترسی به اعلان‌ها
+  const notifyBtn = document.getElementById('notify-enable-btn');
+  if (notifyBtn) {
+    if ("Notification" in window) {
+      if (Notification.permission === 'granted') {
+        notifyBtn.style.display = 'none'; // مخفی کردن اگر از قبل فعال باشد
+      }
+      notifyBtn.onclick = () => {
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            notifyBtn.style.display = 'none';
+            window.showAppNotification('سیستم اعلان فعال شد', 'شما از این پس اعلان‌های شروع روتین را دریافت خواهید کرد.');
+          }
+        });
+      };
+    } else {
+      notifyBtn.style.display = 'none'; // مرورگر پشتیبانی نمی‌کند
+    }
+  }
+});
