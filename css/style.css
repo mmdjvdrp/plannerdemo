@@ -589,3 +589,9 @@
     font-size: 15px;
   }
 }
+/* افکت بصری موضوع فعال انتخاب‌شده */
+.cat-item.selected {
+  border-color: var(--cat-color) !important;
+  background: var(--surface3) !important;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cat-color) 35%, transparent);
+}
