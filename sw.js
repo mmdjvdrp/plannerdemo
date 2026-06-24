@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = "planner-cache-v9"; 
+const CACHE_NAME = "planner-cache-v10"; 
 const assetsToCache = [
   "/",
   "/index.html",
@@ -44,6 +44,12 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
+  const url = event.request.url;
+  // برای جلوگیری از خراب شدن فرآیند بازیابی رمز عبور، درخواست‌های احراز هویت را کش نکن
+  if (url.includes("#") || url.includes("type=recovery") || url.includes("access_token") || url.includes("supabase.co")) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
@@ -51,7 +57,7 @@ self.addEventListener("fetch", (event) => {
       }
 
       return fetch(event.request).then((response) => {
-        if (response && response.status === 200 && event.request.url.startsWith("https://cdn.jsdelivr.net/")) {
+        if (response && response.status === 200 && url.startsWith("https://cdn.jsdelivr.net/")) {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
