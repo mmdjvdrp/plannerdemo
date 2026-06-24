@@ -39,7 +39,10 @@ export function delCat(name){
 }
 
 export function clearEventForm(){
-  document.getElementById("ev-title").value = "";
-  document.getElementById("ev-start").value = "";
-  document.getElementById("ev-end").value   = "";
+  const titleEl = document.getElementById("ev-title");
+  const startEl = document.getElementById("ev-start");
+  const endEl = document.getElementById("ev-end");
+  if (titleEl) titleEl.value = "";
+  if (startEl) startEl.value = "";
+  if (endEl) endEl.value = "";
 }
