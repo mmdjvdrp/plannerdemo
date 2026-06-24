@@ -429,4 +429,89 @@ export function updateLiveButton(){
   if(!btn || !status) return;
   if(state.liveSession){
     btn.classList.add('is-running'); btn.textContent = 'پایان و ثبت فعالیت';
-    const cat = state.cats.find(c => c.id === state.liveSession.catId) || {name: 'م
+    const cat = state.cats.find(c => c.id === state.liveSession.catId) || {name: 'موضوع', color: '#999'};
+    const isPaused = state.liveSession.pauseStartMins !== null && state.liveSession.pauseStartMins !== undefined;
+    const pauseMinsTotal = state.liveSession.pauseMins || 0;
+    status.innerHTML = `<div style="margin-bottom: 4px;">ثبت زنده: ${escHtml(state.liveSession.title || cat.name)} (${escHtml(cat.name)})</div><div id="live-elapsed-time" style="color:var(--accent2); font-weight:700; margin-bottom:4px;">در حال محاسبه...</div>${pauseMinsTotal ? `<div style="color:var(--accent2); font-size:11px;">کل زمان وقفه: ${pauseMinsTotal} دقیقه</div>` : ''}${isPaused ? `<div style="color:#f87171; font-size:11px; margin-bottom:4px;">⏳ اکنون در حالت پاز موقت</div>` : ''}<div style="display:flex; gap:6px; justify-content:center; margin-top:6px; flex-wrap: wrap;"><button id="live-pause-btn" class="action-btn" style="background:var(--surface3); color:var(--text); border:1px solid var(--border2);">${isPaused ? '▶ ادامه فعالیت' : '⏸ پاز موقت'}</button><button id="live-manual-pause-btn" class="action-btn" style="background:var(--surface3); color:var(--text); border:1px solid var(--border2);">⏳ ثبت وقفه دستی</button><button id="live-cancel-btn" class="action-btn" style="background:#f8717122; border:1px solid rgba(248,113,113,0.3); color:#fecaca;">🚫 لغو و انصراف</button></div>`;
+    document.getElementById('live-pause-btn').onclick = (e) => { e.stopPropagation(); toggleLivePause(); };
+    document.getElementById('live-manual-pause-btn').onclick = (e) => { e.stopPropagation(); window.addManualPause(); };
+    document.getElementById('live-cancel-btn').onclick = (e) => { e.stopPropagation(); window.cancelLiveSession(); };
+    startLiveStopwatch();
+  } else { btn.classList.remove('is-running'); btn.textContent = 'شروع فعالیت زنده'; status.textContent = ''; if(liveStopwatchInterval) { clearInterval(liveStopwatchInterval); liveStopwatchInterval = null; } }
+}
+
+export function renderRoutines() {
+  const list = document.getElementById('rt-list');
+  if(!list) return;
+  list.innerHTML = '';
+  if (state.routines.length === 0) { list.innerHTML = `<div style="font-size:11px; color:var(--muted); text-align:center;">هیچ روتینی تعریف نشده است</div>`; return; }
+  const daysName = ['ش', 'ی', 'د', 'س', 'چ', 'پ', 'ج'];
+  state.routines.forEach(rt => {
+    const cat = state.cats.find(c => c.id === rt.catId) || {name: 'حذف شده', color: '#999', emoji: '📅'};
+    const daysStr = rt.days.map(d => daysName[d]).join('، ');
+    list.innerHTML += `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--surface2); border:1px solid var(--border); border-right:3px solid ${cat.color}; border-radius:8px; padding:10px; margin-bottom:8px;"><div><div style="font-size:13px; font-weight:700;">${escHtml(rt.title)}</div><div style="font-size:11px; color:var(--muted)">${rt.startTime} - ${rt.endTime} | ${daysStr}</div></div><button class="btn-del" style="width:28px; height:28px; font-size:12px;" onclick="delRoutine('${rt.id}')">✕</button></div>`;
+  });
+}
+
+export function renderCustomEmojisEditor() {
+  const container = document.getElementById('custom-emojis-container');
+  if (!container) return;
+  container.innerHTML = state.moodPresets.map((preset, idx) => {
+    let previewHtml = '';
+    if (preset.type === 'webm') previewHtml = `<video src="${preset.value}" autoplay loop muted playsinline style="width:32px; height:32px; border-radius:50%; object-fit:cover; border:1px solid var(--border);"></video>`;
+    else previewHtml = `<span style="font-size:24px; display:inline-block; width:32px; text-align:center;">${preset.value}</span>`;
+    const textInputStyle = preset.type === 'webm' ? 'display: none;' : '';
+    return `<div style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:10px; border-radius:8px; border:1px solid var(--border); flex-wrap:wrap;"><input type="text" class="emoji-label-input" data-idx="${idx}" value="${escHtml(preset.label)}" style="width:110px; padding:6px; font-size:12px; height:32px; border-radius:6px;" placeholder="عنوان"><select class="emoji-type-select" data-idx="${idx}" style="width:100px; padding:6px; font-size:12px; height:32px; border-radius:6px; background:var(--surface); color:var(--text); border:1px solid var(--border2);" onchange="onEmojiTypeChange(this, ${idx})"><option value="text" ${preset.type === 'text' ? 'selected' : ''}>شکلک متنی</option><option value="webm" ${preset.type === 'webm' ? 'selected' : ''}>انیمیشن (WebM)</option></select><div style="display:flex; align-items:center; justify-content:center; width:38px; height:32px;">${previewHtml}</div><input type="text" class="emoji-value-input" data-idx="${idx}" id="preset-val-input-${idx}" value="${escHtml(preset.value)}" style="width:60px; padding:6px; font-size:12px; height:32px; border-radius:6px; ${textInputStyle}" placeholder="😊"><button class="action-btn" type="button" onclick="openEmojiGallery(${idx})" style="padding: 0 10px; height:32px; font-size:11px; background:var(--surface3); border:1px solid var(--border2); color:var(--text); ${preset.type === 'text' ? 'display:none;' : ''}">🖼️ گالری</button><button class="btn-del" type="button" onclick="deleteMoodPreset(${idx})" style="width:32px; height:32px; font-size:12px; flex-shrink:0;">✕</button></div>`;
+  }).join('');
+}
+
+window.onEmojiTypeChange = function(selectEl, idx) {
+  state.moodPresets[idx].type = selectEl.value;
+  if (selectEl.value === 'webm' && !state.moodPresets[idx].value.startsWith('http')) state.moodPresets[idx].value = 'https://ipureiqnhgatigewbggj.supabase.co/storage/v1/object/public/emojis/001.webm';
+  else if (selectEl.value === 'text' && state.moodPresets[idx].value.startsWith('http')) state.moodPresets[idx].value = '😊';
+  renderCustomEmojisEditor();
+};
+
+export function renderGoals() {
+  const list = document.getElementById('goals-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const currentMonthGoals = state.goals.filter(g => g.month === state.mapMonth);
+  if (currentMonthGoals.length === 0) { list.innerHTML = `<div style="color:var(--muted); font-size:12px; text-align:center; padding: 10px 0;">هدفی برای ماه جاری (${state.mapMonth}) تعریف نشده است.</div>`; return; }
+  currentMonthGoals.forEach(g => {
+    const cat = state.cats.find(c => c.id === g.catId) || {name: 'حذف شده', color: '#999', emoji: '📅'};
+    const completedMins = state.events.filter(e => e.catId === g.catId && e.date.startsWith(g.month)).reduce((sum, e) => sum + e.durMins, 0);
+    const pct = g.targetMins > 0 ? Math.min(100, Math.round((completedMins / g.targetMins) * 100)) : 0;
+    const itemDiv = document.createElement('div');
+    itemDiv.style.cssText = `background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; border-right: 4px solid ${cat.color};`;
+    itemDiv.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><div style="display:flex; align-items:center; gap:4px;"><span style="font-size:13px; font-weight:700;">${escHtml(g.title || cat.name)}</span></div><button class="btn-del" style="width:24px; height:24px; font-size:11px;" onclick="deleteGoal('${g.id}')">✕</button></div><div style="display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-bottom:4px;"><span>پیشرفت: <b>${fmtDur(completedMins)}</b> از <b>${fmtDur(g.targetMins)}</b></span><span>${pct}%</span></div><div class="prog-bg" style="height:6px; background:var(--surface3);"><div class="prog-fill" style="background:${cat.color}; width:${pct}%;"></div></div>`;
+    list.appendChild(itemDiv);
+  });
+}
+
+export function syncSettingsForm() {
+  if (document.getElementById('setting-calendar')) document.getElementById('setting-calendar').value = state.calendarPref;
+  if (document.getElementById('setting-duration-format')) document.getElementById('setting-duration-format').value = state.timeFormatPref;
+  if (document.getElementById('setting-week-start')) document.getElementById('setting-week-start').value = state.weekStartPref;
+  if (document.getElementById('setting-pomodoro-work')) document.getElementById('setting-pomodoro-work').value = state.pomodoroWorkPref;
+  if (document.getElementById('setting-pomodoro-break')) document.getElementById('setting-pomodoro-break').value = state.pomodoroBreakPref;
+}
+
+export function render(){
+  applyTheme();
+  const dateLabel = document.getElementById('date-label');
+  if (dateLabel) dateLabel.textContent = fmtDateLabel(state.curDate);
+  const groupToggle = document.getElementById('timeline-group-toggle');
+  if (groupToggle) groupToggle.checked = state.groupTimelinePref;
+  renderCats();
+  renderTimeline();
+  renderReport();
+  renderActivityMap();
+  renderHabitsAndTodos();
+  renderMood();
+  renderRoutines();
+  renderGoals(); 
+  updateLiveButton();
+  syncSettingsForm();
+  renderCustomEmojisEditor(); 
+}
