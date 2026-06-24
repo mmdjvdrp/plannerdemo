@@ -1,209 +1,92 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-  <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#111827">
-<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png">
-<link rel="apple-touch-icon" href="./icons/icon-192.png">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ورود</title>
-
-<style>
-body{
-  font-family: Vazirmatn,sans-serif;
-  background:#111827;
-  color:white;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  min-height:100vh;
-}
-
-.box {
-  width: 90%;         
-  max-width: 350px;   
-  background: #1f2937;
-  padding: 25px;
-  border-radius: 15px;
-}
-
-input{
-  width:100%;
-  padding:10px;
-  margin:5px 0 15px;
-  box-sizing:border-box;
-}
-
-button{
-  width:100%;
-  padding:10px;
-  cursor:pointer;
-}
-
-.hidden{
-  display:none;
-}
-.tab-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-.tab-btn {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #374151;
-  background: #111827;
-  color: #9ca3af;
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: Vazirmatn, sans-serif;
-}
-.tab-btn.active {
-  background: #7c5cfc;
-  color: white;
-  border-color: #7c5cfc;
-}
-@media (max-width: 400px) {
-  body {
-    padding: 12px;
-  }
-  .box {
-    padding: 16px;
-    border-radius: 12px;
-  }
-}
-
-.err { color: #f87171; font-size: 13px; margin-top: -10px; margin-bottom: 10px; display: none; }
-</style>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ورود / ثبت نام</title>
+  <style>
+    body { font-family: Vazirmatn, sans-serif; background: #111827; color: white; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .box { width: 90%; max-width: 350px; background: #1f2937; padding: 25px; border-radius: 15px; }
+    input { width: 100%; padding: 10px; margin: 5px 0 15px; box-sizing: border-box; background: #374151; border: none; color: white; border-radius: 8px; }
+    button { width: 100%; padding: 10px; cursor: pointer; border: none; border-radius: 8px; background: #7c5cfc; color: white; font-weight: bold; }
+    .tab-row { display: flex; gap: 8px; margin-bottom: 20px; }
+    .tab-btn { flex: 1; padding: 8px; background: #111827; color: #9ca3af; border: 1px solid #374151; cursor: pointer; border-radius: 8px; }
+    .tab-btn.active { background: #7c5cfc; color: white; border-color: #7c5cfc; }
+    .link { text-align: center; font-size: 12px; color: #9ca3af; cursor: pointer; margin-top: 10px; }
+  </style>
 </head>
 <body>
 
 <div class="box">
+  <h2 style="margin-bottom:20px; text-align:center;">تقویم روزانه</h2>
 
-  <h2 style="margin-bottom:20px">تقویم روزانه</h2>
+  <!-- فرم اصلی ورود -->
+  <div id="auth-box">
+    <div class="tab-row">
+      <button class="tab-btn active" id="tab-login">ورود</button>
+      <button class="tab-btn" id="tab-register">ثبت نام</button>
+    </div>
 
-  <div class="tab-row">
-    <button class="tab-btn active" id="tab-login">ورود</button>
-    <button class="tab-btn" id="tab-register">ثبت نام</button>
+    <div id="login-section">
+      <input id="email" type="email" placeholder="ایمیل">
+      <input id="password" type="password" placeholder="رمز عبور">
+      <button id="main-btn">ورود</button>
+      <div class="link" id="forgot-link">رمز عبور را فراموش کرده‌اید؟</div>
+    </div>
   </div>
 
-  <!-- فرم ورود -->
-  <div id="login-section">
-    <label>ایمیل</label>
-    <input id="login-email" type="email" placeholder="example@email.com">
-    <label>رمز</label>
-    <input id="login-password" type="password" placeholder="رمز عبور">
-    <div class="err" id="login-err"></div>
-    <button id="login-btn">ورود</button>
+  <!-- فرم فراموشی رمز -->
+  <div id="forgot-section" style="display:none;">
+    <h3 style="text-align:center;">بازیابی رمز</h3>
+    <input id="forgot-email" type="email" placeholder="ایمیل خود را وارد کنید">
+    <button id="reset-btn">ارسال لینک بازیابی</button>
+    <div class="link" onclick="location.reload()">بازگشت به ورود</div>
   </div>
-
-  <!-- فرم ثبت نام -->
-  <div id="register-section" style="display:none">
-    <label>نام نمایشی</label>
-    <input id="register-name" placeholder="مثلاً: علی">
-    <label>ایمیل</label>
-    <input id="register-email" type="email" placeholder="example@email.com">
-    <label>رمز</label>
-    <input id="register-password" type="password" placeholder="حداقل ۶ کاراکتر">
-    <div class="err" id="register-err"></div>
-    <button id="register-btn">ثبت نام</button>
-  </div>
-
 </div>
 
 <script type="module">
-import { supabase } from "./js/supabase.js";
+  import { supabase } from "./js/supabase.js";
 
-let registering = false;
+  const isRegistering = () => document.getElementById('tab-register').classList.contains('active');
 
-// بررسی وضعیت ورود کاربر
-supabase.auth.onAuthStateChange((event, session) => {
-  if (session?.user && !registering) {
-    window.location.href = "./index.html";
-  }
-});
+  document.getElementById('tab-login').onclick = () => {
+    document.getElementById('tab-login').classList.add('active');
+    document.getElementById('tab-register').classList.remove('active');
+    document.getElementById('main-btn').textContent = "ورود";
+  };
 
-// سوئیچ بین تب‌ها
-document.getElementById("tab-login").onclick = () => {
-  document.getElementById("login-section").style.display = "block";
-  document.getElementById("register-section").style.display = "none";
-  document.getElementById("tab-login").classList.add("active");
-  document.getElementById("tab-register").classList.remove("active");
-};
+  document.getElementById('tab-register').onclick = () => {
+    document.getElementById('tab-register').classList.add('active');
+    document.getElementById('tab-login').classList.remove('active');
+    document.getElementById('main-btn').textContent = "ثبت نام";
+  };
 
-document.getElementById("tab-register").onclick = () => {
-  document.getElementById("register-section").style.display = "block";
-  document.getElementById("login-section").style.display = "none";
-  document.getElementById("tab-register").classList.add("active");
-  document.getElementById("tab-login").classList.remove("active");
-};
-
-// ورود به حساب کاربری
-document.getElementById("login-btn").onclick = async () => {
-  const email    = document.getElementById("login-email").value.trim();
-  const password = document.getElementById("login-password").value;
-  const err      = document.getElementById("login-err");
-  err.style.display = "none";
-
-  if(!email || !password){ 
-    err.textContent = "ایمیل و رمز را وارد کنید"; 
-    err.style.display = "block"; 
-    return; 
-  }
-
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    err.textContent = "ایمیل یا رمز اشتباه است یا تایید نشده است.";
-    err.style.display = "block";
-  }
-};
-
-// کد اصلاح‌شده ثبت‌نام در دکمه register-btn فایل login.html
-
-document.getElementById("register-btn").onclick = async () => {
-  const name     = document.getElementById("register-name").value.trim();
-  const email    = document.getElementById("register-email").value.trim();
-  const password = document.getElementById("register-password").value;
-  const err      = document.getElementById("register-err");
-  err.style.display = "none";
-
-  if(!name){ err.textContent = "نام را وارد کنید"; err.style.display = "block"; return; }
-  if(!email){ err.textContent = "ایمیل را وارد کنید"; err.style.display = "block"; return; }
-  if(password.length < 6){ err.textContent = "رمز باید حداقل ۶ کاراکتر باشد"; err.style.display = "block"; return; }
-
-  try{
-    registering = true;
+  document.getElementById('main-btn').onclick = async () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
     
-    // ۱. ثبت‌نام کاربر به همراه ذخیره نام در متادیتای اکانت (display_name)
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          display_name: name // ذخیره مستقیم نام کاربری در ساختار هویت
-        }
-      }
-    });
-    if (error) throw error;
-
-    // ۲. ذخیره همزمان در جدول پروفایل دیتابیس به عنوان پشتیبان
-    if (data?.user) {
-      await supabase
-        .from("profiles")
-        .upsert({ id: data.user.id, name });
+    if(isRegistering()) {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if(error) alert(error.message); else alert("ثبت نام موفق! ایمیل خود را چک کنید.");
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if(error) alert("ایمیل یا رمز اشتباه است"); else window.location.href = "./index.html";
     }
+  };
 
-    registering = false;
-    window.location.href = "./index.html";
-  }catch(e){
-    registering = false;
-    err.textContent = e.message;
-    err.style.display = "block";
-  }
-};
+  // قابلیت فراموشی رمز
+  document.getElementById('forgot-link').onclick = () => {
+    document.getElementById('auth-box').style.display = 'none';
+    document.getElementById('forgot-section').style.display = 'block';
+  };
+
+  document.getElementById('reset-btn').onclick = async () => {
+    const email = document.getElementById('forgot-email').value;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password.html',
+    });
+    if(error) alert(error.message); else alert("لینک بازیابی به ایمیل شما ارسال شد.");
+  };
 </script>
-
 </body>
 </html>
