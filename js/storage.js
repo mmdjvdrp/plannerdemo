@@ -59,7 +59,10 @@ export const state = {
   mapMonth: getLocalDateStr().slice(0, 7),
   editingEventId: null,
   activeView: 'daily',
-  selectedRtDays: []
+  selectedRtDays: [],
+
+  // وضعیت صداهای پس‌زمینه سنتزشده فعال
+  focusSoundPlaying: null 
 };
 
 export async function saveCloud(){
