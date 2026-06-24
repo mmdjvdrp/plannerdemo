@@ -1,5 +1,5 @@
 // sw.js
-const CACHE_NAME = "planner-cache-v8"; // ارتقا نسخه کش جهت همگام‌سازی آنی تمام مراجع
+const CACHE_NAME = "planner-cache-v9"; 
 const assetsToCache = [
   "/",
   "/index.html",
@@ -15,7 +15,6 @@ const assetsToCache = [
   "/icons/icon-512.png"
 ];
 
-// ۱. نصب سرویس‌ورکر و کش کردن فایل‌های اصلی پوسته
 self.addEventListener("install", (event) => {
   self.skipWaiting(); 
   event.waitUntil(
@@ -25,7 +24,6 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// ۲. فعال‌سازی سرویس‌ورکر، پاک کردن کش‌های قدیمی و در دست گرفتن صفحات باز
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     Promise.all([
@@ -43,7 +41,6 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// ۳. مدیریت درخواست‌ها و واکشی کش آفلاین بدون ایجاد ارور unhandled
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 
@@ -64,7 +61,4 @@ self.addEventListener("fetch", (event) => {
       });
     })
   );
-});
-navigator.serviceWorker.ready.then(reg => {
-  reg.showNotification(title, options);
 });
