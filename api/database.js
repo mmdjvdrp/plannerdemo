@@ -7,20 +7,16 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: "UID is required" });
   }
 
-  // آدرس دیتابیس فایربیس شما
   const firebaseDbUrl = `https://planner-751c1-default-rtdb.europe-west1.firebasedatabase.app/users/${uid}/plannerData.json`;
 
   try {
-    // حالت لود اطلاعات (GET)
     if (req.method === 'GET') {
       const response = await fetch(firebaseDbUrl);
       const data = await response.json();
       return res.status(200).json(data);
     }
 
-    // حالت ذخیره اطلاعات (PUT)
     if (req.method === 'PUT') {
-      // بررسی ایمن برای جلوگیری از Double Stringify
       const payload = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
 
       const response = await fetch(firebaseDbUrl, {
