@@ -1,80 +1,51 @@
 // js/render.js
 import { state, save, saveCloud } from "./storage.js";
-import { fmtDateLabel, fmtTime, fmtDur, escHtml, pad, getNow, parseTime } from "./helpers.js";
+import { fmtDateLabel, fmtTime, fmtDur, escHtml, pad, getNow } from "./helpers.js";
 
-// ... [سایر بخش‌های کد که تغییر نکرده‌اند حفظ شود] ...
+export function renderHabitsAndTodos() {
+  const todoList = document.getElementById('todo-list');
+  const habitList = document.getElementById('habit-list');
+  if(!todoList || !habitList) return;
 
-export function renderCats(){
-  const sel = document.getElementById('cat-select');
-  const manager = document.getElementById('cat-manager');
-  if(!sel || !manager) return;
-
-  const currentVal = sel.value;
-  sel.innerHTML = '';
-  manager.innerHTML = '';
+  // نمایش تودوها: تودوهای روز جاری + تودوهای تکرار شونده
+  todoList.innerHTML = state.todos.length ? '' : '<div style="color:var(--muted); font-size:12px;">کاری ثبت نشده</div>';
   
-  if(!state.cats.length){
-    sel.innerHTML = '<option disabled selected>اول موضوع بسازید</option>';
-    return;
-  }
-  
-  state.cats.forEach(c => {
-    // اصلاح نحوه خواندن ایموجی/لینک
-    const emoji = c.emoji || '📅';
-    const isUrl = emoji.startsWith('http');
-    const displayEmoji = isUrl ? '🎥' : emoji;
-
-    // آپشن‌های سلکت
-    const o = document.createElement('option'); 
-    o.value = c.id; 
-    o.textContent = `${displayEmoji} ${c.name}`;
-    sel.appendChild(o);
-
-    // مدیریت لیست در تب مدیریت
-    const item = document.createElement('div');
-    item.className = 'cat-item'; 
-    item.style.setProperty('--cat-color', c.color);
+  state.todos.forEach(t => {
+    // تودوی تکرار شونده اگر انجام شده باشد، فقط خط‌خورده می‌شود ولی ناپدید نمی‌شود
+    const isDone = t.isDaily ? (t.doneDates && t.doneDates[state.curDate]) : t.done;
     
-    // رندر ایموجی در لیست (اصلاح نمایش ایموجی‌های WebM)
-    const emojiHtml = isUrl 
-      ? `<video src="${emoji}" autoplay loop muted playsinline style="width:24px; height:24px; object-fit:cover; border-radius:50%; pointer-events:none;"></video>`
-      : `<span style="font-size:16px;">${emoji}</span>`;
-
-    item.innerHTML = `
-      <span class="cat-swatch"></span>
-      <div class="cat-emoji-preview">${emojiHtml}</div>
-      <span class="cat-name">${escHtml(c.name)}</span>
-      <button type="button" class="btn-icon" onclick="window.openCatEmojiPicker('${c.id}')" style="width:30px; height:30px; font-size:14px;">🖼️</button>
-      <input class="cat-color-edit" type="color" value="${c.color}">
-      <button class="cat-delete" type="button">✕</button>
-    `;
-    
-    // ذخیره تغییرات رنگ
-    item.querySelector('.cat-color-edit').onchange = (e) => {
-      c.color = e.target.value; 
-      save('planner_cats', state.cats); 
-      saveCloud(); 
-      render();
-    };
-    
-    item.querySelector('.cat-delete').onclick = (e) => { e.stopPropagation(); window.delCat(c.id); };
-    manager.appendChild(item);
+    todoList.innerHTML += `
+      <div class="todo-item" style="gap: 8px;">
+        <input type="checkbox" class="todo-checkbox" ${isDone ? 'checked' : ''} onchange="toggleTodo('${t.id}')">
+        <span class="todo-title ${isDone ? 'done' : ''} ${t.isDaily ? 'recurring' : ''}">
+          ${escHtml(t.title)} ${t.isDaily ? '🔁' : ''}
+        </span>
+        <button class="btn-del" style="width:24px; height:24px;" onclick="deleteTodo('${t.id}')">✕</button>
+      </div>`;
   });
-  
-  if (currentVal && state.cats.some(c => c.id === currentVal)) sel.value = currentVal;
+
+  // لیست عادت‌ها (بدون تغییرات ساختاری در رندر)
+  habitList.innerHTML = state.habits.length ? '' : '<div style="color:var(--muted); font-size:12px;">عادتی ثبت نشده</div>';
+  // ... (سایر کدهای رندر عادت‌ها حفظ شود)
 }
 
-// ... [بقیه توابع renderTimeline, renderReport و غیره] ...
-
-// تابع جدید برای اطمینان از اعمال تغییرات ایموجی
-export function updateCatEmoji(catId, newEmojiValue) {
-  const cat = state.cats.find(c => c.id === catId);
-  if (cat) {
-    cat.emoji = newEmojiValue;
-    save('planner_cats', state.cats);
-    saveCloud();
-    render(); // رندر مجدد برای اعمال تغییرات در همه بخش‌ها
-  }
+// تابع کمکی برای رندر کردن لیست روتین‌ها (با دکمه‌های بزرگ)
+export function renderRoutines() {
+  const list = document.getElementById('rt-list');
+  if(!list) return;
+  list.innerHTML = state.routines.map(rt => `
+    <div style="background:var(--surface2); padding:10px; border-radius:10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+      <div><strong>${escHtml(rt.title)}</strong><br><small style="color:var(--muted)">${rt.startTime} - ${rt.endTime}</small></div>
+      <button class="btn-del" onclick="delRoutine('${rt.id}')">✕</button>
+    </div>
+  `).join('');
 }
 
-// ...
+export function render() {
+  renderCats();
+  renderTimeline();
+  renderHabitsAndTodos();
+  renderRoutines();
+  renderGoals();
+  // ... (سایر توابع رندر)
+}
