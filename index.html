@@ -110,10 +110,14 @@ body[data-nav-style="compact"] .nav-btn {
     <div class="logo">
       <span class="logo-dot"></span>
       تقویم روزانه
+      <!-- امتیاز بهره‌وری روزانه -->
+      <span id="daily-focus-score" style="font-size: 11px; padding: 3px 8px; border-radius: 20px; background: var(--accent-glow); color: var(--accent); font-weight: bold; margin-inline-start: 10px;">امتیاز: ۰</span>
     </div>
     <div class="date-nav">
       <div style="display:flex; align-items:center; gap:8px">
         <span id="welcome-msg" style="font-size:13px; color:var(--muted)"></span>
+        <!-- دکمه سوییچ سریع تم -->
+        <button id="quick-theme-btn" style="width:34px; height:34px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--text); cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center;" title="تغییر سریع قالب">🌓</button>
         <button id="notify-enable-btn" style="padding:6px 12px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-size:11px;">🔔 اعلان‌ها</button>
         <button id="logout-btn" style="padding:6px 14px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-size:12px;">خروج</button>
       </div>
@@ -122,6 +126,11 @@ body[data-nav-style="compact"] .nav-btn {
       <button id="next-day" title="روز بعد">&#8250;</button>
       <button class="btn-today" id="btn-today">امروز</button>
     </div>
+  </div>
+
+  <!-- بنر انگیزشی هوشمند روزانه -->
+  <div id="motivation-banner" style="background: linear-gradient(135deg, var(--surface2), var(--surface)); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; margin-bottom: 16px; font-size: 12px; color: var(--text); display: flex; align-items: center; gap: 10px; line-height: 1.6;">
+    💡 در حال آماده‌سازی پیام انگیزشی اختصاصی شما...
   </div>
 
   <!-- App Navigation Wrapper -->
@@ -201,6 +210,16 @@ body[data-nav-style="compact"] .nav-btn {
 
     <!-- تب 4: ثبت و مدیریت -->
     <div id="tab-add" class="tab-section">
+      <!-- ابزار نویز صوتی و صداهای تمرکز -->
+      <div class="card" style="border: 1px solid var(--accent-glow)">
+        <div class="card-title">🎧 صداهای پس‌زمینه تمرکز (Focus Noise Generator)</div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button id="focus-sound-rain" class="action-btn" style="flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text);">🌧️ صدای باران</button>
+          <button id="focus-sound-brown" class="action-btn" style="flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text);">🎛️ فرکانس عمیق (Brown)</button>
+        </div>
+        <p style="font-size:10px; color:var(--muted); margin-top:8px; text-align:center;">تولید شده به صورت کاملاً زنده توسط هوش مصنوعی مرورگر شما</p>
+      </div>
+
       <div class="card">
         <div class="card-title" id="manage-card-title">ثبت فعالیت جدید</div>
         <div class="form-group"><label>عنوان فعالیت</label><input type="text" id="act-title"></div>
@@ -302,6 +321,11 @@ body[data-nav-style="compact"] .nav-btn {
 
     <!-- تب 5: گزارش‌ها -->
     <div id="tab-reports" class="tab-section">
+      <!-- تحلیل همبستگی هوشمند خلق‌و‌خو -->
+      <div id="mood-correlation-card" style="background:var(--accent-glow); border: 1px solid var(--accent); padding:12px; border-radius:12px; margin-bottom:16px; font-size:12px; color:var(--text); text-align:center;">
+        🧠 در حال تحلیل همبستگی حال روحی با فعالیت‌های ثبت‌شده شما...
+      </div>
+
       <div class="card">
         <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap: wrap; gap:8px;">
           <span>گزارش دوره‌ای موضوعات</span>
