@@ -1,367 +1,137 @@
-// js/planner.js
-import { supabase } from "./supabase.js";
-import { state, save, saveCloud, loadCloud } from "./storage.js";
-import { getNow, parseTime, pad, getLocalDateStr, fmtDateLabel, fmtTime } from "./helpers.js";
-import { render, applyTheme, updateLiveButton } from "./render.js";
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon.png">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <meta name="theme-color" content="#111827">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تقویم روزانه</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-function safeBindEvent(id, event, callback) {
-  const el = document.getElementById(id);
-  if (el) {
-    el[event] = callback;
-  }
+<style>
+/* بهبود UI روتین‌ها */
+.rt-day-btn {
+  width: 40px; height: 40px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  border: 1px solid var(--border2); background: var(--surface);
+  color: var(--muted); cursor: pointer; transition: all 0.2s;
+}
+.rt-day-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+/* اصلاح نمایش تودوها */
+.todo-title.done { text-decoration: line-through; opacity: 0.6; }
+.todo-title.recurring { font-weight: 700; color: var(--accent); }
+
+/* مدال راهنما */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999; display: none; align-items: center; justify-content: center; padding: 20px; }
+.modal-content { background: var(--surface); padding: 25px; border-radius: 20px; max-width: 400px; width: 100%; text-align: center; }
+
+@media(max-width: 768px) {
+  body { padding: 12px 8px; }
+  .wrap { padding-bottom: 190px !important; } 
+  .header { flex-direction: column; align-items: center; text-align: center; gap: 14px; }
+  #date-label { font-size: 13px; padding: 6px 4px; }
+  .app-nav-container { position: fixed; bottom: 0; left: 0; right: 0; border-radius: 20px 20px 0 0; z-index: 1000; background: var(--surface); padding: 10px 0; box-shadow: 0 -5px 25px rgba(0,0,0,0.3); }
+  .app-nav { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 8px !important; padding: 4px 12px !important; }
 }
 
-// ساخت سیستم اعلانات حبابی (Toast) درون برنامه‌ای شیک
-window.showToast = function(message, type = 'info') {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    container.style.cssText = `
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 9999;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      pointer-events: none;
-    `;
-    document.body.appendChild(container);
-  }
-  
-  const toast = document.createElement('div');
-  toast.style.cssText = `
-    background: var(--surface);
-    color: var(--text);
-    border: 1px solid var(--border2);
-    border-right: 4px solid var(--accent);
-    padding: 10px 18px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.35);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    pointer-events: auto;
-    animation: toastSlideIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
-  `;
-  
-  if (type === 'success') toast.style.borderRightColor = '#10b981';
-  if (type === 'error') toast.style.borderRightColor = '#ef4444';
-  if (type === 'warning') toast.style.borderRightColor = '#f59e0b';
-  
-  toast.innerHTML = `<span>${message}</span>`;
-  container.appendChild(toast);
-  
-  setTimeout(() => {
-    toast.style.animation = 'toastSlideOut 0.3s ease forwards';
-    setTimeout(() => {
-      toast.remove();
-    }, 300);
-  }, 3500);
-};
+.tab-section { display: none; animation: fadeIn 0.3s ease; }
+.tab-section.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-// انیمیشن کوچک حرکت منو در شروع برنامه برای آگاهی کاربر از قابلیت اسکرول افقی
-function triggerNavPeekAnimation() {
-  const nav = document.querySelector(".app-nav");
-  if (nav && state.mobileNavStyle === 'scroll') {
-    setTimeout(() => {
-      nav.scrollTo({ left: 60, behavior: "smooth" });
-      setTimeout(() => {
-        nav.scrollTo({ left: 0, behavior: "smooth" });
-      }, 450);
-    }, 1200);
-  }
-}
+.nav-btn { flex: 1; padding: 12px; background: transparent; border: none; border-radius: 10px; color: var(--muted); font-family: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s; }
+.nav-btn.active { background: var(--accent-glow); color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
 
-// متغیرها و توابع راهنمای گام به گام تعاملی
-state.tutorialStep = 0;
-const tutorialSteps = [
-  {
-    title: "🎯 به تقویم روزانه خوش آمدید!",
-    desc: "این برنامه هوشمند به شما کمک می‌کند تا فعالیت‌ها، اهداف، عادت‌ها، و حالات روحی خود را به سادگی مدیریت و تحلیل کنید. بیایید با هم یک گشت کوتاه در برنامه بزنیم تا سریع‌تر مسلط شوید."
-  },
-  {
-    title: "🛠️ ساخت دسته‌بندی و شکلک‌های متحرک",
-    desc: "در تب <b>مدیریت</b> می‌توانید موضوعات خود را با رنگ دلخواه بسازید. همچنین با زدن روی دکمه 🖼️ گالری در مدیریت، می‌توانید از بین ۲۰۰ اموجی متحرک سه بعدی (WebM) اختصاصی، شکلک زیبایی برای دسته‌هایتان قرار دهید!"
-  },
-  {
-    title: "⏱️ ثبت فعالیت‌ها و سیستم زنده",
-    desc: "شما می‌توانید فعالیت‌ها را به صورت دستی یا به صورت کاملاً زنده ثبت کنید. سیستم ثبت زنده به <b>تایمر هوشمند پومودورو</b> مجهز است. زمان لحظه‌ای تایمر زنده برای راحتی شما، بر روی عنوان سربرگ مرورگر (Tab Title) نیز نوشته می‌شود."
-  },
-  {
-    title: "✔️ تودوهای ماندگار و عادت‌ها",
-    desc: "تودوهای یک‌بار مصرفی که امروز تکمیل نکنید، به طور خودکار به فردا منتقل می‌شوند (Rollover) تا کارهای معوقه فراموش نشوند! عادت‌های ۷ روزه خود را نیز می‌توانید با یک کلیک ساده کنترل کنید."
-  },
-  {
-    title: "📊 نمودارها و تحلیل زمانی",
-    desc: "در تب <b>گزارش‌ها</b> زمان‌های سپری شده هر فعالیت را در ۳ قالب خطی، دایره‌ای یا ستونی فیلتر کرده و الگوهای تمرکزی را در نقشه حرارتی ماهانه ارزیابی کنید."
-  }
-];
+<div class="wrap">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">
+      <span class="logo-dot"></span> تقویم روزانه
+    </div>
+    <div class="date-nav">
+      <div style="display:flex; align-items:center; gap:8px">
+        <span id="welcome-msg" style="font-size:13px; color:var(--muted)"></span>
+        <button id="notify-enable-btn" style="padding:6px 12px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-size:11px;">🔔 اعلان‌ها</button>
+        <button id="logout-btn" style="padding:6px 14px; border-radius:8px; border:1px solid var(--border2); background:var(--surface2); color:var(--muted); cursor:pointer; font-size:12px;">خروج</button>
+      </div>
+      <button id="prev-day">&#8249;</button>
+      <div id="date-label"></div>
+      <button id="next-day">&#8250;</button>
+      <button class="btn-today" id="btn-today">امروز</button>
+    </div>
+  </div>
 
-window.openTutorial = function() {
-  state.tutorialStep = 0;
-  showTutorialStep();
-  const modal = document.getElementById("tutorial-modal");
-  if (modal) modal.style.display = "flex";
-};
+  <div class="app-nav-container">
+    <nav class="app-nav">
+      <button class="nav-btn active" data-tab="tab-timeline">📅 تایم‌لاین</button>
+      <button class="nav-btn" data-tab="tab-habits">✔️ کارها</button>
+      <button class="nav-btn" data-tab="tab-journal">📖 دفترچه</button>
+      <button class="nav-btn" data-tab="tab-add">⚙️ مدیریت</button>
+      <button class="nav-btn" data-tab="tab-reports">📊 گزارش</button>
+      <button class="nav-btn" data-tab="tab-settings">🛠️ تنظیمات</button>
+    </nav>
+  </div>
 
-window.nextTutorialStep = function() {
-  if (state.tutorialStep < tutorialSteps.length - 1) {
-    state.tutorialStep++;
-    showTutorialStep();
-  } else {
-    closeTutorial();
-  }
-};
+  <div class="tab-container">
+    <div id="tab-timeline" class="tab-section active">
+      <div class="card"><div class="card-title">تایم‌لاین &mdash; <span id="tl-date"></span></div><div id="timeline"></div></div>
+    </div>
 
-window.prevTutorialStep = function() {
-  if (state.tutorialStep > 0) {
-    state.tutorialStep--;
-    showTutorialStep();
-  }
-};
+    <div id="tab-habits" class="tab-section">
+      <div class="card"><div class="card-title">کارهای روزانه</div><input type="text" id="todo-input" placeholder="افزودن کار..."><div id="todo-list"></div></div>
+      <div class="card"><div class="card-title">عادت‌ها</div><div id="habit-list"></div></div>
+    </div>
 
-window.closeTutorial = function() {
-  const modal = document.getElementById("tutorial-modal");
-  if (modal) modal.style.display = "none";
-  localStorage.setItem("planner_tutorial_seen", "true");
-};
+    <div id="tab-journal" class="tab-section">
+      <div class="card"><div class="card-title">حال و هوا</div><div id="mood-emojis"></div></div>
+      <div class="card"><textarea id="journal-textarea" style="width:100%; height:150px;"></textarea><button id="save-journal-btn" class="btn-primary">ذخیره</button></div>
+    </div>
 
-function showTutorialStep() {
-  const step = tutorialSteps[state.tutorialStep];
-  const titleEl = document.getElementById("tutorial-step-title");
-  const descEl = document.getElementById("tutorial-step-desc");
-  const prevBtn = document.getElementById("tutorial-prev");
-  const nextBtn = document.getElementById("tutorial-next");
-  const dotsEl = document.getElementById("tutorial-dots");
-  
-  if (titleEl) titleEl.innerHTML = step.title;
-  if (descEl) descEl.innerHTML = step.desc;
-  
-  if (prevBtn) {
-    prevBtn.style.visibility = state.tutorialStep === 0 ? "hidden" : "visible";
-  }
-  if (nextBtn) {
-    nextBtn.textContent = state.tutorialStep === tutorialSteps.length - 1 ? "فهمیدم، شروع کار!" : "بعدی ›";
-  }
-  
-  if (dotsEl) {
-    dotsEl.innerHTML = tutorialSteps.map((_, i) => `
-      <span style="
-        width: 8px; height: 8px; border-radius: 50%;
-        background: ${i === state.tutorialStep ? 'var(--accent)' : 'var(--border2)'};
-        transition: background 0.2s;
-      "></span>
-    `).join('');
-  }
-}
+    <div id="tab-add" class="tab-section">
+      <div class="card">
+        <div class="card-title">مدیریت روتین‌ها</div>
+        <div id="rt-days-selector" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;">
+          <button type="button" class="rt-day-btn" data-day="0">ش</button>
+          <button type="button" class="rt-day-btn" data-day="1">ی</button>
+          <button type="button" class="rt-day-btn" data-day="2">د</button>
+          <button type="button" class="rt-day-btn" data-day="3">س</button>
+          <button type="button" class="rt-day-btn" data-day="4">چ</button>
+          <button type="button" class="rt-day-btn" data-day="5">پ</button>
+          <button type="button" class="rt-day-btn" data-day="6">ج</button>
+        </div>
+        <div id="rt-list"></div>
+      </div>
+    </div>
 
-// پیاده‌سازی متغیرهای صفحه گالری سوپابیس
-state.galleryPage = 0;
-state.galleryPageSize = 30;
-state.currentSelectingPresetIdx = null;
-state.currentSelectingCatId = null;
+    <div id="tab-reports" class="tab-section">
+      <div class="card"><canvas id="report-chart"></canvas><div id="report-grid"></div></div>
+    </div>
 
-// باز کردن گالری اموجی‌های متحرک برای خلق‌وخو
-window.openEmojiGallery = function(idx) {
-  state.currentSelectingPresetIdx = idx;
-  state.currentSelectingCatId = null;
-  state.galleryPage = 0;
-  const modal = document.getElementById("emoji-gallery-modal");
-  if (modal) {
-    modal.style.display = "flex";
-    renderGalleryGrid();
-  }
-};
+    <div id="tab-settings" class="tab-section">
+      <div class="card">
+        <div class="card-title">تنظیمات</div>
+        <select id="setting-theme-select"><option value="auto">خودکار</option><option value="dark">تیره</option><option value="light">روشن</option></select>
+      </div>
+    </div>
+  </div>
+</div>
 
-// باز کردن گالری اموجی‌های متحرک برای شکلک دسته‌بندی (موضوعات)
-window.openCatEmojiPicker = function(catId) {
-  state.currentSelectingCatId = catId;
-  state.currentSelectingPresetIdx = null;
-  state.galleryPage = 0;
-  const modal = document.getElementById("emoji-gallery-modal");
-  if (modal) {
-    modal.style.display = "flex";
-    renderGalleryGrid();
-  }
-};
+<!-- مدال راهنما -->
+<div class="modal-overlay" id="tutorial-modal">
+  <div class="modal-content">
+    <h3>خوش آمدید!</h3>
+    <p>برای شروع کافیست فعالیت‌های خود را ثبت کنید...</p>
+    <button class="btn-primary" onclick="document.getElementById('tutorial-modal').style.display='none'">متوجه شدم</button>
+  </div>
+</div>
 
-// رندر کردن گالری ۲۰۰ تایی اموجی‌ها با قابلیت صفحه‌بندی هوشمند
-window.renderGalleryGrid = function() {
-  const grid = document.getElementById("gallery-grid");
-  const label = document.getElementById("gallery-range-label");
-  if (!grid || !label) return;
-
-  grid.innerHTML = '';
-  const start = state.galleryPage * state.galleryPageSize + 1;
-  const end = Math.min(start + state.galleryPageSize - 1, 200);
-
-  label.textContent = `نمایش شکلک‌های ${start} تا ${end} (از مجموع ۲۰۰)`;
-
-  for (let i = start; i <= end; i++) {
-    const numStr = String(i).padStart(3, '0');
-    const fileUrl = `https://ipureiqnhgatigewbggj.supabase.co/storage/v1/object/public/emojis/${numStr}.webm`;
-
-    const item = document.createElement('div');
-    item.style.cssText = `
-      aspect-ratio: 1;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      position: relative;
-      transition: all 0.2s;
-    `;
-
-    item.onmouseenter = () => { item.style.borderColor = 'var(--accent)'; item.style.transform = 'scale(1.05)'; };
-    item.onmouseleave = () => { item.style.borderColor = 'var(--border)'; item.style.transform = 'none'; };
-
-    item.innerHTML = `
-      <video src="${fileUrl}" autoplay loop muted playsinline style="width:85%; height:85%; object-fit:cover; pointer-events:none; border-radius:50%;"></video>
-      <span style="position:absolute; bottom:2px; font-size:8px; color:var(--muted); font-family:monospace; background:rgba(0,0,0,0.35); padding:0 3px; border-radius:3px;">${numStr}</span>
-    `;
-
-    item.onclick = () => {
-      if (state.currentSelectingPresetIdx !== null && state.currentSelectingPresetIdx !== undefined) {
-        const idx = state.currentSelectingPresetIdx;
-        state.moodPresets[idx].type = 'webm';
-        state.moodPresets[idx].value = fileUrl;
-        save("planner_mood_presets", state.moodPresets);
-        saveCloud();
-        render();
-        window.showToast("شکلک خلق و خو بروزرسانی شد.", "success");
-      } else if (state.currentSelectingCatId) {
-        const catId = state.currentSelectingCatId;
-        const cat = state.cats.find(c => c.id === catId);
-        if (cat) {
-          cat.emoji = fileUrl;
-          save("planner_cats", state.cats);
-          saveCloud();
-          render();
-          window.showToast("شکلک دسته‌بندی بروزرسانی شد.", "success");
-        }
-      }
-      
-      state.currentSelectingPresetIdx = null;
-      state.currentSelectingCatId = null;
-      document.getElementById("emoji-gallery-modal").style.display = "none";
-    };
-
-    grid.appendChild(item);
-  }
-};
-
-// رویدادهای مدال گالری سوپابیس
-safeBindEvent("close-gallery-modal", "onclick", () => {
-  document.getElementById("emoji-gallery-modal").style.display = "none";
-  state.currentSelectingPresetIdx = null;
-  state.currentSelectingCatId = null;
-});
-
-safeBindEvent("gallery-prev", "onclick", () => {
-  if (state.galleryPage > 0) {
-    state.galleryPage--;
-    renderGalleryGrid();
-  }
-});
-
-safeBindEvent("gallery-next", "onclick", () => {
-  const maxPages = Math.ceil(200 / state.galleryPageSize);
-  if (state.galleryPage + 1 < maxPages) {
-    state.galleryPage++;
-    renderGalleryGrid();
-  }
-});
-
-// مدیریت تغییر تب‌ها
-window.switchTab = function(tabId) {
-  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".tab-section").forEach(s => s.classList.remove("active"));
-  document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add("active");
-  const targetSec = document.getElementById(tabId);
-  if (targetSec) {
-    targetSec.classList.add("active");
-  }
-};
-
-document.querySelectorAll(".nav-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    switchTab(btn.getAttribute("data-tab"));
-  });
-});
-
-// مدیریت تاریخ روزانه
-safeBindEvent("prev-day", "onclick", () => { shiftDay(-1); });
-safeBindEvent("next-day", "onclick", () => { shiftDay(1); });
-safeBindEvent("btn-today", "onclick", () => { state.curDate = getLocalDateStr(); render(); });
-
-function shiftDay(n){
-  const [y,mo,d] = state.curDate.split("-").map(Number);
-  const dt = new Date(y, mo - 1, d + n);
-  state.curDate = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
-  render();
-}
-
-safeBindEvent("map-prev", "onclick", () => {
-  const [y,mo] = state.mapMonth.split("-").map(Number);
-  const dt = new Date(y, mo - 2, 1); 
-  state.mapMonth = dt.getFullYear() + "-" + pad(dt.getMonth() + 1); 
-  render();
-});
-
-safeBindEvent("map-next", "onclick", () => {
-  const [y,mo] = state.mapMonth.split("-").map(Number);
-  const dt = new Date(y, mo, 1); 
-  state.mapMonth = dt.getFullYear() + "-" + pad(dt.getMonth() + 1); 
-  render();
-});
-
-safeBindEvent("map-cat-select", "onchange", () => { render(); });
-
-// رویداد سوییچ روشن/خاموش یکپارچه‌سازی و گروه‌بندی کارهای هم‌موضوع در تایم‌لاین
-safeBindEvent("timeline-group-toggle", "onchange", (e) => {
-  state.groupTimelinePref = e.target.checked;
-  save("planner_group_timeline_pref", state.groupTimelinePref);
-  saveCloud();
-  render();
-});
-
-// چک‌باکس انتخاب همه موضوعات در بخش گزارش‌ها
-safeBindEvent("report-select-all", "onchange", (e) => {
-  if (e.target.checked) {
-    state.selectedReportCats = state.cats.map(c => c.id);
-  } else {
-    state.selectedReportCats = [];
-  }
-  save("planner_selected_report_cats", state.selectedReportCats);
-  saveCloud();
-  render();
-});
-
-// رویدادهای تغییر تم و تغییر رنگ دلخواه از تب تنظیمات
-safeBindEvent("setting-theme-select", "onchange", (e) => {
-  state.theme = e.target.value; 
-  save("planner_theme", state.theme); 
-  saveCloud(); 
-  applyTheme();
-  window.showToast("تم برنامه تغییر یافت.", "success");
-});
-
-safeBindEvent("setting-accent-picker", "onchange", (e) => {
-  state.accentColor = e.target.value; 
-  save("planner_accent", state.accentColor); 
-  saveCloud(); 
-  applyTheme();
-  window.showToast("رنگ شاخص برنامه تغییر یافت.", "success");
-});
-
-// رویداد جدید تغییر استایل ناوبری گوشی در تنظیمات
-safeBindEvent("setting-mobile-nav", "on
+<script type="module" src="./js/planner.js"></script>
+</body>
+</html>
