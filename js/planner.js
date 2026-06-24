@@ -1,5 +1,577 @@
 // js/planner.js
-// ... (سایر کدها)
+import { supabase } from "./supabase.js";
+import { state, save, saveCloud, loadCloud } from "./storage.js";
+import { getNow, parseTime, pad, getLocalDateStr, fmtDateLabel, fmtTime } from "./helpers.js";
+import { render, applyTheme, updateLiveButton } from "./render.js";
+
+function safeBindEvent(id, event, callback) {
+  const el = document.getElementById(id);
+  if (el) {
+    el[event] = callback;
+  }
+}
+
+// انیمیشن منو در شروع برنامه برای آگاهی کاربر از قابلیت اسکرول
+function triggerNavPeekAnimation() {
+  const nav = document.querySelector(".app-nav");
+  if (nav && state.mobileNavStyle === 'scroll') {
+    setTimeout(() => {
+      nav.scrollTo({ left: 60, behavior: "smooth" });
+      setTimeout(() => {
+        nav.scrollTo({ left: 0, behavior: "smooth" });
+      }, 450);
+    }, 1200);
+  }
+}
+
+// سیستم راهنما و توتوریال تعاملی (Interactive Tour)
+window.startOnboardingTutorial = function() {
+  state.tutorialStep = 0;
+  const tutorialSteps = [
+    {
+      title: "خوش آمدید! 🌟",
+      text: "به تقویم روزانه هوشمند خوش آمدید. بیایید در چند مرحله کوتاه روش کار با برنامه را یاد بگیریم.",
+      element: ".logo"
+    },
+    {
+      title: "تایم‌لاین روزانه 📅",
+      text: "در این بخش فعالیت‌های ثبت شده روز را می‌بینید. کارها به طور خودکار گروه‌بندی یا مرتب می‌شوند.",
+      element: '[data-tab="tab-timeline"]'
+    },
+    {
+      title: "مدیریت کارها و عادت‌ها ✔️",
+      text: "اینجا می‌توانید لیست کارهای روزانه (تودو) خود را همراه با موضوع رنگی اختصاصی و عادت‌های هفتگی مدیریت کنید.",
+      element: '[data-tab="tab-habits"]'
+    },
+    {
+      title: "ثبت فعالیت و روتین‌ها ⚙️",
+      text: "از این بخش می‌توانید فعالیت جدید ثبت کنید، روتین‌های ثابت روزهای هفته را بسازید یا تایمر زنده پومودورو را روشن کنید.",
+      element: '[data-tab="tab-add"]'
+    },
+    {
+      title: "گزارش‌های پیشرفته 📊",
+      text: "نمودار دایره‌ای، خطی و نقشه‌های حرارتی میزان تمرکز و توزیع زمان شما را نمایش می‌دهند.",
+      element: '[data-tab="tab-reports"]'
+    },
+    {
+      title: "تنظیمات و سفارشی‌سازی 🛠️",
+      text: "در این بخش می‌توانید از بین ۴ حالت نمایش منوی موبایل انتخاب کنید، پوسته را تغییر دهید یا شکلک‌های خلق‌و‌خو را اختصاصی کنید.",
+      element: '[data-tab="tab-settings"]'
+    }
+  ];
+
+  const modal = document.getElementById("tutorial-modal");
+  const modalTitle = document.getElementById("tutorial-title");
+  const modalText = document.getElementById("tutorial-text");
+  const nextBtn = document.getElementById("tutorial-next-btn");
+  
+  if (!modal || !modalTitle || !modalText || !nextBtn) return;
+
+  const showStep = (idx) => {
+    const step = tutorialSteps[idx];
+    modalTitle.textContent = step.title;
+    modalText.textContent = step.text;
+    
+    document.querySelectorAll(".nav-btn").forEach(el => el.style.boxShadow = "none");
+    const target = document.querySelector(step.element);
+    if (target && idx > 0) {
+      target.style.boxShadow = "0 0 0 3px var(--accent)";
+    }
+
+    if (idx === tutorialSteps.length - 1) {
+      nextBtn.textContent = "شروع کار با برنامه 👍";
+    } else {
+      nextBtn.textContent = "بعدی ➔";
+    }
+    modal.style.display = "flex";
+  };
+
+  nextBtn.onclick = () => {
+    state.tutorialStep++;
+    if (state.tutorialStep < tutorialSteps.length) {
+      showStep(state.tutorialStep);
+    } else {
+      modal.style.display = "none";
+      document.querySelectorAll(".nav-btn").forEach(el => el.style.boxShadow = "none");
+      localStorage.setItem("planner_tutorial_seen", "true");
+    }
+  };
+
+  showStep(0);
+};
+
+// اجرای خودکار توتوریال برای دفعات اول
+function checkFirstTimeUser() {
+  const seen = localStorage.getItem("planner_tutorial_seen");
+  if (!seen) {
+    setTimeout(() => {
+      startOnboardingTutorial();
+    }, 2000);
+  }
+}
+
+// سیستم هوشمند اعلان‌ها و یادآور روتین‌ها
+function initRoutineAlertEngine() {
+  if (!('Notification' in window)) return;
+  
+  setInterval(() => {
+    if (Notification.permission !== 'granted') return;
+    
+    const nowStr = getNow();
+    const jsDay = new Date().getDay();
+    const satIndex = (jsDay + 1) % 7; 
+    
+    state.routines.forEach(rt => {
+      if (rt.startTime === nowStr && rt.days.includes(satIndex)) {
+        const lastNotifiedKey = `notified_${rt.id}_${nowStr}_${getLocalDateStr()}`;
+        if (!localStorage.getItem(lastNotifiedKey)) {
+          localStorage.setItem(lastNotifiedKey, "true");
+          
+          const cat = state.cats.find(c => c.id === rt.catId);
+          new Notification(`⏰ زمان انجام روتین فرا رسید!`, {
+            body: `فعالیت روتین "${rt.title}" ${cat ? `تحت موضوع ${cat.name}` : ''} را آغاز کنید.`,
+            icon: "./icons/icon-192.png"
+          });
+          
+          new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(()=>{});
+        }
+      }
+    });
+  }, 15000);
+}
+
+// پیاده‌سازی متغیرهای صفحه گالری سوپابیس
+state.galleryPage = 0;
+state.galleryPageSize = 30;
+state.currentSelectingPresetIdx = null;
+state.currentSelectingCatId = null; 
+
+// باز کردن گالری اموجی‌های متحرک برای خلق‌وخو
+window.openEmojiGallery = function(idx) {
+  state.currentSelectingPresetIdx = idx;
+  state.currentSelectingCatId = null;
+  state.galleryPage = 0;
+  const modal = document.getElementById("emoji-gallery-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    renderGalleryGrid();
+  }
+};
+
+// باز کردن گالری اموجی‌های متحرک برای شکلک دسته‌بندی
+window.openCatEmojiPicker = function(catId) {
+  state.currentSelectingCatId = catId;
+  state.currentSelectingPresetIdx = null;
+  state.galleryPage = 0;
+  const modal = document.getElementById("emoji-gallery-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    renderGalleryGrid();
+  }
+};
+
+// رندر کردن گالری ۲۰۰ تایی اموجی‌ها با قابلیت صفحه‌بندی
+window.renderGalleryGrid = function() {
+  const grid = document.getElementById("gallery-grid");
+  const label = document.getElementById("gallery-range-label");
+  if (!grid || !label) return;
+
+  grid.innerHTML = '';
+  const start = state.galleryPage * state.galleryPageSize + 1;
+  const end = Math.min(start + state.galleryPageSize - 1, 200);
+
+  label.textContent = `نمایش شکلک‌های ${start} تا ${end} (از مجموع ۲۰۰)`;
+
+  for (let i = start; i <= end; i++) {
+    const numStr = String(i).padStart(3, '0');
+    const fileUrl = `https://ipureiqnhgatigewbggj.supabase.co/storage/v1/object/public/emojis/${numStr}.webm`;
+
+    const item = document.createElement('div');
+    item.style.cssText = `
+      aspect-ratio: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      transition: all 0.2s;
+    `;
+
+    item.onmouseenter = () => { item.style.borderColor = 'var(--accent)'; item.style.transform = 'scale(1.05)'; };
+    item.onmouseleave = () => { item.style.borderColor = 'var(--border)'; item.style.transform = 'none'; };
+
+    item.innerHTML = `
+      <video src="${fileUrl}" autoplay loop muted playsinline style="width:85%; height:85%; object-fit:cover; pointer-events:none; border-radius:50%;"></video>
+      <span style="position:absolute; bottom:2px; font-size:8px; color:var(--muted); font-family:monospace; background:rgba(0,0,0,0.35); padding:0 3px; border-radius:3px;">${numStr}</span>
+    `;
+
+    item.onclick = () => {
+      const idx = state.currentSelectingPresetIdx;
+      const catId = state.currentSelectingCatId;
+
+      if (idx !== null && idx !== undefined) {
+        state.moodPresets[idx].type = 'webm';
+        state.moodPresets[idx].value = fileUrl;
+        save("planner_mood_presets", state.moodPresets);
+        saveCloud();
+        render();
+      } else if (catId) {
+        const cat = state.cats.find(c => c.id === catId);
+        if (cat) {
+          cat.emoji = fileUrl;
+          save("planner_cats", state.cats);
+          saveCloud();
+          render();
+        }
+      }
+      
+      state.currentSelectingPresetIdx = null;
+      state.currentSelectingCatId = null;
+      document.getElementById("emoji-gallery-modal").style.display = "none";
+    };
+
+    grid.appendChild(item);
+  }
+};
+
+safeBindEvent("close-gallery-modal", "onclick", () => {
+  document.getElementById("emoji-gallery-modal").style.display = "none";
+  state.currentSelectingPresetIdx = null;
+  state.currentSelectingCatId = null;
+});
+
+safeBindEvent("gallery-prev", "onclick", () => {
+  if (state.galleryPage > 0) {
+    state.galleryPage--;
+    renderGalleryGrid();
+  }
+});
+
+safeBindEvent("gallery-next", "onclick", () => {
+  const maxPages = Math.ceil(200 / state.galleryPageSize);
+  if (state.galleryPage + 1 < maxPages) {
+    state.galleryPage++;
+    renderGalleryGrid();
+  }
+});
+
+// مدیریت تغییر تب‌ها
+window.switchTab = function(tabId) {
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-section").forEach(s => s.classList.remove("active"));
+  document.querySelector(`.nav-btn[data-tab="${tabId}"]`)?.classList.add("active");
+  const targetSec = document.getElementById(tabId);
+  if (targetSec) {
+    targetSec.classList.add("active");
+  }
+};
+
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    switchTab(btn.getAttribute("data-tab"));
+  });
+});
+
+// مدیریت تاریخ روزانه
+safeBindEvent("prev-day", "onclick", () => { shiftDay(-1); });
+safeBindEvent("next-day", "onclick", () => { shiftDay(1); });
+safeBindEvent("btn-today", "onclick", () => { state.curDate = getLocalDateStr(); render(); });
+
+function shiftDay(n){
+  const [y,mo,d] = state.curDate.split("-").map(Number);
+  const dt = new Date(y, mo - 1, d + n);
+  state.curDate = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
+  render();
+}
+
+safeBindEvent("map-prev", "onclick", () => {
+  const [y,mo] = state.mapMonth.split("-").map(Number);
+  const dt = new Date(y, mo - 2, 1); 
+  state.mapMonth = dt.getFullYear() + "-" + pad(dt.getMonth() + 1); 
+  render();
+});
+
+safeBindEvent("map-next", "onclick", () => {
+  const [y,mo] = state.mapMonth.split("-").map(Number);
+  const dt = new Date(y, mo, 1); 
+  state.mapMonth = dt.getFullYear() + "-" + pad(dt.getMonth() + 1); 
+  render();
+});
+
+safeBindEvent("map-cat-select", "onchange", () => { render(); });
+
+safeBindEvent("timeline-group-toggle", "onchange", (e) => {
+  state.groupTimelinePref = e.target.checked;
+  save("planner_group_timeline_pref", state.groupTimelinePref);
+  saveCloud();
+  render();
+});
+
+safeBindEvent("report-select-all", "onchange", (e) => {
+  if (e.target.checked) {
+    state.selectedReportCats = state.cats.map(c => c.id);
+  } else {
+    state.selectedReportCats = [];
+  }
+  save("planner_selected_report_cats", state.selectedReportCats);
+  saveCloud();
+  render();
+});
+
+safeBindEvent("setting-theme-select", "onchange", (e) => {
+  state.theme = e.target.value; 
+  save("planner_theme", state.theme); 
+  saveCloud(); 
+  applyTheme();
+});
+
+safeBindEvent("setting-accent-picker", "onchange", (e) => {
+  state.accentColor = e.target.value; 
+  save("planner_accent", state.accentColor); 
+  saveCloud(); 
+  applyTheme();
+});
+
+safeBindEvent("setting-mobile-nav", "onchange", (e) => {
+  state.mobileNavStyle = e.target.value; 
+  save("planner_mobile_nav_style", state.mobileNavStyle); 
+  saveCloud(); 
+  applyTheme();
+});
+
+safeBindEvent("setting-calendar", "onchange", (e) => {
+  state.calendarPref = e.target.value; 
+  save("planner_calendar_pref", state.calendarPref); 
+  saveCloud(); 
+  render();
+});
+
+safeBindEvent("setting-duration-format", "onchange", (e) => {
+  state.timeFormatPref = e.target.value; 
+  save("planner_time_format_pref", state.timeFormatPref); 
+  saveCloud(); 
+  render();
+});
+
+safeBindEvent("setting-week-start", "onchange", (e) => {
+  state.weekStartPref = e.target.value; 
+  save("planner_week_start_pref", state.weekStartPref); 
+  saveCloud(); 
+  render();
+});
+
+safeBindEvent("setting-pomodoro-work", "onchange", (e) => {
+  state.pomodoroWorkPref = parseInt(e.target.value) || 25;
+  save("planner_pomo_work_pref", state.pomodoroWorkPref); saveCloud(); render();
+});
+
+safeBindEvent("setting-pomodoro-break", "onchange", (e) => {
+  state.pomodoroBreakPref = parseInt(e.target.value) || 5;
+  save("planner_pomo_break_pref", state.pomodoroBreakPref); saveCloud(); render();
+});
+
+safeBindEvent("report-chart-type", "onchange", (e) => {
+  state.chartTypePref = e.target.value; 
+  save("planner_chart_type_pref", state.chartTypePref); 
+  saveCloud(); 
+  render();
+});
+
+safeBindEvent("toggle-cat", "onclick", () => {
+  const box = document.getElementById("new-cat-box");
+  if (box) {
+    box.style.display = box.style.display === "block" ? "none" : "block";
+  }
+});
+
+safeBindEvent("save-cat", "onclick", () => {
+  const name = document.getElementById("new-cat-name").value.trim();
+  const color = document.getElementById("new-cat-color").value;
+  const emoji = document.getElementById("new-cat-emoji").value.trim() || "📅";
+  if(!name){ 
+    alert("نام دسته‌بندی را وارد کنید"); 
+    return; 
+  }
+  
+  const nc = { id: "c" + Date.now(), name, color, emoji };
+  state.cats.push(nc);
+  save("planner_cats", state.cats); 
+  saveCloud();
+  
+  document.getElementById("new-cat-name").value = "";
+  document.getElementById("new-cat-emoji").value = "";
+  document.getElementById("new-cat-box").style.display = "none";
+  render();
+  document.getElementById("cat-select").value = nc.id;
+  document.getElementById("map-cat-select").value = nc.id;
+});
+
+window.delCat = function(id) {
+  if(!confirm("آیا مطمئن هستید؟ با تایید شما، تمام فعالیت‌ها، روتین‌ها و اهدافی که تاکنون تحت این موضوع ثبت شده‌اند به طور کامل پاک خواهند شد.")) return;
+  
+  state.cats = state.cats.filter(c => c.id !== id);
+  state.events = state.events.filter(e => e.catId !== id);
+  state.routines = state.routines.filter(r => r.catId !== id);
+  state.goals = state.goals.filter(g => g.catId !== id);
+  
+  if (state.selectedReportCats) {
+    state.selectedReportCats = state.selectedReportCats.filter(cId => cId !== id);
+    save("planner_selected_report_cats", state.selectedReportCats);
+  }
+
+  save("planner_cats", state.cats); 
+  save("planner_ev", state.events);
+  save("planner_routines", state.routines);
+  save("planner_goals", state.goals);
+  
+  saveCloud(); 
+  render();
+};
+
+window.editEv = function(id) {
+  const ev = state.events.find(e => e.id === id);
+  if (!ev) return;
+  
+  state.editingEventId = id;
+  
+  document.getElementById("act-title").value = ev.title || "";
+  document.getElementById("cat-select").value = ev.catId || "";
+  document.getElementById("act-tags").value = (ev.tags || []).join(" ");
+  document.getElementById("start-time").value = fmtTime(ev.sMins);
+  document.getElementById("end-time").value = fmtTime(ev.eMins);
+  if (document.getElementById("act-pause")) {
+    document.getElementById("act-pause").value = ev.pauseMins || 0;
+  }
+  
+  switchTab("tab-add");
+  render();
+};
+
+safeBindEvent("cancel-edit-btn", "onclick", () => {
+  state.editingEventId = null;
+  document.getElementById("act-title").value = "";
+  document.getElementById("act-tags").value = "";
+  document.getElementById("start-time").value = "";
+  document.getElementById("end-time").value = "";
+  if (document.getElementById("act-pause")) {
+    document.getElementById("act-pause").value = "0";
+  }
+  render();
+});
+
+safeBindEvent("add-btn", "onclick", () => {
+  const title = document.getElementById("act-title").value.trim();
+  const catId = document.getElementById("cat-select").value;
+  const tagsRaw = document.getElementById("act-tags").value.trim();
+  const stRaw = document.getElementById("start-time").value;
+  const enRaw = document.getElementById("end-time").value;
+  const pauseRaw = document.getElementById("act-pause") ? document.getElementById("act-pause").value.trim() : "0";
+  
+  if(!catId){ 
+    alert("موضوع انتخاب نشده است"); 
+    return; 
+  }
+  const sMins = parseTime(stRaw); 
+  const eMins = parseTime(enRaw);
+  if(sMins === null || eMins === null) return alert("فرمت زمان وارد شده صحیح نیست");
+
+  let totalDur = eMins - sMins; 
+  if(totalDur < 0) totalDur += 24 * 60; 
+
+  const pauseMins = parseInt(pauseRaw, 10) || 0;
+  if (pauseMins < 0) {
+    alert("مقدار زمان وقفه نمی‌تواند عدد منفی باشد!");
+    return;
+  }
+  if (pauseMins >= totalDur) {
+    alert(`خطا: مدت زمان وقفه (${pauseMins} دقیقه) نمی‌تواند بزرگتر یا مساوی کل زمان فعالیت (${totalDur} دقیقه) باشد!`);
+    return;
+  }
+
+  const durMins = totalDur - pauseMins;
+  const tags = tagsRaw ? tagsRaw.split(" ").filter(t => t.startsWith("#")) : [];
+
+  if (state.editingEventId) {
+    const idx = state.events.findIndex(e => e.id === state.editingEventId);
+    if (idx !== -1) {
+      state.events[idx].title = title;
+      state.events[idx].catId = catId;
+      state.events[idx].sMins = sMins;
+      state.events[idx].eMins = eMins;
+      state.events[idx].durMins = durMins;
+      state.events[idx].pauseMins = pauseMins;
+      state.events[idx].tags = tags;
+    }
+    state.editingEventId = null;
+    alert("تغییرات فعالیت با موفقیت بروزرسانی شد.");
+  } else {
+    state.events.push({ id: Date.now().toString(), date: state.curDate, title, catId, sMins, eMins, durMins, pauseMins, tags });
+  }
+
+  save("planner_ev", state.events); 
+  saveCloud(); 
+  render(); 
+  switchTab("tab-timeline");
+});
+
+safeBindEvent("live-btn", "onclick", () => {
+  if(!state.liveSession){
+    state.liveSession = {
+      title: document.getElementById("act-title").value.trim(),
+      catId: document.getElementById("cat-select").value,
+      date: state.curDate, sMins: parseTime(getNow()), 
+      pauseMins: 0,
+      pauseStartMins: null,
+      isPomodoro: document.getElementById("pomodoro-toggle").checked
+    };
+    save("planner_live", state.liveSession); saveCloud(); updateLiveButton();
+  } else {
+    const endNow = parseTime(getNow());
+    
+    let finalPauseMins = state.liveSession.pauseMins || 0;
+    if (state.liveSession.pauseStartMins !== null && state.liveSession.pauseStartMins !== undefined) {
+      let diff = endNow - state.liveSession.pauseStartMins;
+      if (diff < 0) diff += 24 * 60;
+      finalPauseMins += diff;
+    }
+
+    let totalElapsed = endNow - state.liveSession.sMins; if(totalElapsed < 0) totalElapsed += 24 * 60;
+    let durMins = totalElapsed - finalPauseMins;
+    if(durMins <= 0) durMins = 1;
+
+    state.events.push({
+      id: Date.now().toString(), date: state.liveSession.date, title: state.liveSession.title,
+      catId: state.liveSession.catId, sMins: state.liveSession.sMins, eMins: endNow, durMins, pauseMins: finalPauseMins, tags: []
+    });
+    state.liveSession = null; save("planner_live", null); save("planner_ev", state.events); saveCloud(); render(); updateLiveButton();
+  }
+});
+
+window.cancelLiveSession = function() {
+  if(!confirm("آیا از لغو فعالیت زنده اطمینان دارید؟")) return;
+  state.liveSession = null;
+  save("planner_live", null);
+  saveCloud();
+  updateLiveButton();
+};
+
+window.delEv = function(id) {
+  if(!confirm("حذف شود؟")) return;
+  state.events = state.events.filter(e => e.id !== id);
+  save("planner_ev", state.events); saveCloud(); render();
+};
+
+// تودو و عادت‌ها
+safeBindEvent("add-todo-btn", "onclick", () => {
+  const title = document.getElementById("todo-input").value.trim(); if(!title) return;
+  const catId = document.getElementById("todo-cat-select")?.value || "";
+  state.todos.push({ id: "t" + Date.now(), title, date: state.curDate, done: false, isDaily: false, doneDates: {}, catId });
+  save("planner_todos", state.todos); saveCloud(); render(); document.getElementById("todo-input").value = "";
+});
 
 window.toggleTodo = (id) => {
   const t = state.todos.find(x => x.id === id);
@@ -12,7 +584,20 @@ window.toggleTodo = (id) => {
     }
     save("planner_todos", state.todos);
     saveCloud();
-    render(); // حالا تودو ناپدید نمی‌شود، فقط استایل می‌گیرد
+    render();
+  }
+};
+
+window.toggleRecurringTodo = (id) => {
+  const t = state.todos.find(x => x.id === id);
+  if (t) {
+    t.isDaily = !t.isDaily;
+    if (t.isDaily) {
+      t.doneDates = t.doneDates || {};
+    }
+    save("planner_todos", state.todos);
+    saveCloud();
+    render();
   }
 };
 
@@ -23,16 +608,321 @@ window.deleteTodo = (id) => {
   render(); 
 };
 
-// مدیریت روزهای روتین در پنل
-const rtDays = document.querySelectorAll('.rt-day-btn');
-rtDays.forEach(btn => {
-  btn.onclick = () => {
-    btn.classList.toggle('active');
-    const day = btn.getAttribute('data-day');
-    if(btn.classList.contains('active')) {
-      if(!state.selectedRtDays.includes(day)) state.selectedRtDays.push(day);
-    } else {
-      state.selectedRtDays = state.selectedRtDays.filter(d => d !== day);
+safeBindEvent("add-habit-btn", "onclick", () => {
+  const title = document.getElementById("habit-input").value.trim(); if(!title) return;
+  state.habits.push({ id: "h" + Date.now(), title }); 
+  save("planner_habits", state.habits); saveCloud(); render(); 
+  document.getElementById("habit-input").value = "";
+});
+
+window.toggleHabit = (hId, dateStr) => {
+  if(!state.habitLogs[hId]) state.habitLogs[hId] = {};
+  state.habitLogs[hId][dateStr] = !state.habitLogs[hId][dateStr];
+  save("planner_habitLogs", state.habitLogs); saveCloud(); render();
+};
+
+window.deleteHabit = (id) => { 
+  state.habits = state.habits.filter(x => x.id !== id); 
+  delete state.habitLogs[id]; 
+  save("planner_habits", state.habits); 
+  save("planner_habitLogs", state.habitLogs); 
+  saveCloud(); 
+  render(); 
+};
+
+// ژورنال روزانه
+safeBindEvent("save-journal-btn", "onclick", () => {
+  const note = document.getElementById("journal-textarea").value.trim();
+  let selectedMood = state.moods[state.curDate]?.mood || null;
+  state.moods[state.curDate] = { mood: selectedMood, note: note }; 
+  save("planner_moods", state.moods); 
+  saveCloud(); 
+  alert("خاطره‌نویسی و یادداشت امروز با موفقیت ثبت شد!");
+});
+
+// تغییر نام نمایشی کاربری
+safeBindEvent("save-display-name-btn", "onclick", async () => {
+  const newName = document.getElementById("setting-display-name").value.trim();
+  if(!newName) return alert("لطفاً نام نمایشی معتبری وارد کنید.");
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if(!user) return;
+
+    const { error: authErr } = await supabase.auth.updateUser({
+      data: { display_name: newName }
+    });
+    if (authErr) throw authErr;
+
+    await supabase.from("profiles").upsert({ id: user.id, name: newName });
+    
+    const msg = document.getElementById("welcome-msg");
+    if (msg) msg.textContent = "خوش آمدی، " + newName + " 👋";
+    
+    document.getElementById("setting-display-name").value = "";
+    alert("نام نمایشی شما با موفقیت تغییر یافت!");
+  } catch (err) {
+    console.error(err);
+    alert("خطایی در حین ثبت تغییر نام رخ داد.");
+  }
+});
+
+safeBindEvent("add-mood-preset-btn", "onclick", () => {
+  state.moodPresets.push({
+    level: Date.now().toString(),
+    type: 'text',
+    value: '😊',
+    label: 'حالت جدید'
+  });
+  save("planner_mood_presets", state.moodPresets);
+  saveCloud();
+  render();
+});
+
+window.deleteMoodPreset = function(idx) {
+  if (state.moodPresets.length <= 1) {
+    alert("باید حداقل یک حالت روحی در لیست وجود داشته باشد!");
+    return;
+  }
+  if (!confirm("آیا از حذف این حالت روحی اطمینان دارید؟")) return;
+  state.moodPresets.splice(idx, 1);
+  save("planner_mood_presets", state.moodPresets);
+  saveCloud();
+  render();
+};
+
+safeBindEvent("save-custom-emojis-btn", "onclick", () => {
+  const labels = document.querySelectorAll(".emoji-label-input");
+  const types = document.querySelectorAll(".emoji-type-select");
+  const values = document.querySelectorAll(".emoji-value-input");
+  
+  if (labels.length === state.moodPresets.length) {
+    labels.forEach((inp, idx) => {
+      state.moodPresets[idx].label = inp.value.trim();
+      const type = types[idx].value;
+      state.moodPresets[idx].type = type;
+      
+      let val = values[idx].value.trim();
+      if (type === 'webm') {
+        if (/^\d+$/.test(val)) {
+          const numStr = String(val).padStart(3, '0');
+          val = `https://ipureiqnhgatigewbggj.supabase.co/storage/v1/object/public/emojis/${numStr}.webm`;
+        }
+      }
+      state.moodPresets[idx].value = val;
+    });
+    
+    save("planner_mood_presets", state.moodPresets);
+    saveCloud();
+    render();
+    alert("شخصی‌سازی شکلک‌های زنده با موفقیت ذخیره شد!");
+  }
+});
+
+safeBindEvent("export-btn", "onclick", () => {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: "application/json" }));
+  a.download = `Planner_Backup_${state.curDate}.json`; 
+  a.click();
+});
+
+safeBindEvent("report-confirm-btn", "onclick", () => render());
+
+// ================= مدیریت روتین و اهداف =================
+
+safeBindEvent("toggle-rt-form-btn", "onclick", () => {
+  const p = document.getElementById("rt-card-panel");
+  if(p) { p.style.display = p.style.display === 'block' ? 'none' : 'block'; p.scrollIntoView({ behavior: 'smooth' }); }
+});
+safeBindEvent("close-rt-panel", "onclick", () => {
+  const p = document.getElementById("rt-card-panel"); if(p) p.style.display = 'none';
+});
+
+safeBindEvent("toggle-goal-form-btn", "onclick", () => {
+  const p = document.getElementById("goal-card-panel");
+  if(p) { p.style.display = p.style.display === 'block' ? 'none' : 'block'; p.scrollIntoView({ behavior: 'smooth' }); }
+});
+safeBindEvent("close-goal-panel", "onclick", () => {
+  const p = document.getElementById("goal-card-panel"); if(p) p.style.display = 'none';
+});
+
+window.toggleRtDaySelection = function(btn, dayNum) {
+  if (state.selectedRtDays.includes(dayNum)) {
+    state.selectedRtDays = state.selectedRtDays.filter(d => d !== dayNum);
+    btn.classList.remove("active");
+  } else {
+    state.selectedRtDays.push(dayNum);
+    btn.classList.add("active");
+  }
+};
+
+safeBindEvent("add-rt-btn", "onclick", () => {
+  const title = document.getElementById('rt-title').value.trim();
+  const start = document.getElementById('rt-start').value.trim();
+  const end = document.getElementById('rt-end').value.trim();
+  const catId = document.getElementById('cat-select').value;
+
+  if (!title || !start || !end || !catId) return alert('لطفاً تمامی فیلدهای روتین را تکمیل کنید');
+  if (state.selectedRtDays.length === 0) return alert('حداقل یک روز را انتخاب کنید');
+  if (parseTime(start) === null || parseTime(end) === null) return alert('فرمت زمان روتین نامعتبر است');
+
+  state.routines.push({
+    id: Date.now().toString(), title, catId, days: [...state.selectedRtDays], startTime: start, endTime: end
+  });
+  save('planner_routines', state.routines); saveCloud();
+
+  document.getElementById('rt-title').value = '';
+  document.getElementById('rt-start').value = '';
+  document.getElementById('rt-end').value = '';
+  state.selectedRtDays = [];
+  document.querySelectorAll('.rt-day-btn').forEach(b => b.classList.remove('active'));
+  const p = document.getElementById("rt-card-panel"); if(p) p.style.display = 'none';
+  render();
+});
+
+window.delRoutine = function(id) {
+  if(!confirm('روتین حذف شود؟')) return;
+  state.routines = state.routines.filter(r => r.id !== id);
+  save('planner_routines', state.routines); saveCloud(); render();
+};
+
+safeBindEvent("add-goal-btn", "onclick", () => {
+  const title = document.getElementById('goal-title').value.trim();
+  const catId = document.getElementById('goal-cat-select').value;
+  const targetRaw = document.getElementById('goal-target').value.trim();
+
+  if (!catId) return alert('موضوع را انتخاب کنید');
+  const targetMins = parseInt(targetRaw, 10);
+  if (isNaN(targetMins) || targetMins <= 0) return alert('مدت زمان هدف نامعتبر است');
+
+  state.goals.push({
+    id: Date.now().toString(), title, catId, targetMins, month: state.mapMonth
+  });
+  save('planner_goals', state.goals); saveCloud();
+  document.getElementById('goal-title').value = '';
+  document.getElementById('goal-target').value = '';
+  const p = document.getElementById("goal-card-panel"); if(p) p.style.display = 'none';
+  render();
+  alert('هدف با موفقیت ثبت شد!');
+});
+
+window.deleteGoal = function(id) {
+  if(!confirm('آیا مایل به حذف این هدف هستید؟')) return;
+  state.goals = state.goals.filter(g => g.id !== id);
+  save('planner_goals', state.goals);
+  saveCloud();
+  render();
+};
+
+window.addManualPause = () => {
+  if (!state.liveSession) return;
+  const minsInput = prompt("چند دقیقه وقفه دستی مایلید ثبت کنید؟", "30");
+  if (minsInput === null) return;
+  const mins = parseInt(minsInput, 10);
+  if (isNaN(mins) || mins < 0) {
+    alert("لطفاً یک عدد معتبر وارد کنید.");
+    return;
+  }
+  state.liveSession.pauseMins = (state.liveSession.pauseMins || 0) + mins;
+  save('planner_live', state.liveSession);
+  saveCloud();
+  updateLiveButton();
+};
+
+const notifyBtn = document.getElementById("notify-enable-btn");
+if (notifyBtn) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    notifyBtn.textContent = "🔔 فعال شد";
+    notifyBtn.style.background = "var(--accent-glow)";
+    notifyBtn.style.color = "var(--accent)";
+  }
+
+  notifyBtn.onclick = async () => {
+    if (!('Notification' in window)) {
+      alert("مرورگر شما از سیستم ارسال اعلان سیستمی پشتیبانی نمی‌کند.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      notifyBtn.textContent = "🔔 فعال شد";
+      notifyBtn.style.background = "var(--accent-glow)";
+      notifyBtn.style.color = "var(--accent)";
+
+      new Notification("تقویم روزانه 📅", {
+        body: "اعلان‌های هوشمند با موفقیت فعال شدند! روتین‌ها و پایان پومودورو به شما یادآوری می‌شوند.",
+        icon: "./icons/icon-192.png"
+      });
+    } else if (permission === 'denied') {
+      alert("دسترسی به اعلان‌ها مسدود است. لطفاً از بخش تنظیمات مرورگر خود آن را آزاد کنید.");
     }
   };
+}
+
+// احراز هویت و بارگذاری اطلاعات کاربری
+async function handleUserSession(session) {
+  const user = session?.user;
+  if (!user) { window.location.href = "./login.html"; return; }
+
+  const logoutBtn = document.getElementById("logout-btn");
+  if (logoutBtn) {
+    logoutBtn.onclick = async () => {
+      try { await supabase.auth.signOut(); } catch (err) { console.error(err); }
+      window.location.href = "./login.html";
+    };
+  }
+
+  let displayName = user.user_metadata?.display_name || "";
+  
+  try {
+    const { data: profData } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profData && profData.name) {
+      displayName = profData.name;
+    }
+  } catch (e) {
+    console.error("Error fetching profile name:", e);
+  }
+
+  if (!displayName && user.email) displayName = user.email.split("@")[0];
+  const msg = document.getElementById("welcome-msg");
+  if (msg) msg.textContent = displayName ? "خوش آمدی، " + displayName + " 👋" : "خوش آمدی 👋";
+
+  const settingDisplayName = document.getElementById("setting-display-name");
+  if (settingDisplayName) {
+    settingDisplayName.value = displayName;
+  }
+
+  const dateLabel = document.getElementById("date-label");
+  if (dateLabel) dateLabel.textContent = fmtDateLabel(state.curDate);
+
+  try {
+    await loadCloud();
+    applyTheme();
+    render();
+    triggerNavPeekAnimation(); 
+    checkFirstTimeUser();
+  } catch (err) { console.error(err); }
+}
+
+async function initAuth() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) await handleUserSession(session);
+    else {
+      if (!window.location.hash.includes("type=recovery")) {
+        window.location.href = "./login.html";
+      }
+    }
+  } catch (err) { window.location.href = "./login.html"; }
+}
+
+initAuth();
+initRoutineAlertEngine();
+
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === "SIGNED_OUT") window.location.href = "./login.html";
+  else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
