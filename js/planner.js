@@ -952,3 +952,45 @@ async function callDeepSeek(userMessage) {
         console.error("خطا در ارتباط با هوش مصنوعی:", error);
     }
 }
+async function testAIConnection() {
+    console.log("در حال تلاش برای ارتباط با هوش مصنوعی...");
+    
+    const apiKey = "om-2RPXvGmPydqP85rxiSsJRcmWogdxq41xhAxvTcYrr4T";
+    const url = "https://api.openmodel.ai/v1/chat/completions"; // آدرس کامل
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: "deepseek-v4-flash", // مطمئن شو این مدل در پنل تو فعال است
+                messages: [
+                    { role: "user", content: "سلام، اگر صدام رو می‌شنوی بگو ۱" }
+                ],
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error("خطای API:", errorData);
+            alert("خطا از سمت سرور: " + (errorData.error?.message || "خطای ناشناخته"));
+            return;
+        }
+
+        const data = await response.json();
+        const aiMessage = data.choices[0].message.content;
+        console.log("پاسخ کامل:", data);
+        alert("هوش مصنوعی پاسخ داد: " + aiMessage);
+
+    } catch (error) {
+        console.error("خطای اتصال:", error);
+        alert("خطا در اتصال! احتمالاً به خاطر CORS یا اینترنت است. کنسول (F12) رو چک کن.");
+    }
+}
+
+// این خط رو برای تست دستی اضافه کن که به محض لود شدن اجرا بشه
+// testAIConnection();
