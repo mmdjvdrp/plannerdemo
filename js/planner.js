@@ -926,71 +926,19 @@ supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") window.location.href = "./login.html";
   else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
-async function callDeepSeek(userMessage) {
-    const apiKey = "om-2RPXvGmPydqP85rxiSsJRcmWogdxq41xhAxvTcYrr4T"; // کلیدی که گرفتی
-    
-    try {
-        const response = await fetch("https://api.openmodel.ai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: "deepseek-v4-flash", // نام مدل را چک کن که دقیق باشد
-                messages: [
-                    { role: "system", content: "تو یک دستیار هوشمند برای اپلیکیشن پلنر هستی." },
-                    { role: "user", content: userMessage }
-                ]
-            })
-        });
+async function askAI(userPrompt) {
+  const { data, error } = await supabase.functions.invoke('ai-helper', {
+    body: { prompt: userPrompt }
+  });
 
-        const data = await response.json();
-        console.log("پاسخ هوش مصنوعی:", data.choices[0].message.content);
-        return data.choices[0].message.content;
-    } catch (error) {
-        console.error("خطا در ارتباط با هوش مصنوعی:", error);
-    }
-}
-async function testAIConnection() {
-    console.log("در حال تلاش برای ارتباط با هوش مصنوعی...");
-    
-    const apiKey = "om-2RPXvGmPydqP85rxiSsJRcmWogdxq41xhAxvTcYrr4T";
-    const url = "https://api.openmodel.ai/v1/chat/completions"; // آدرس کامل
+  if (error) {
+    console.error("خطای هوش مصنوعی:", error);
+    return;
+  }
 
-    try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: "deepseek-v4-flash", // مطمئن شو این مدل در پنل تو فعال است
-                messages: [
-                    { role: "user", content: "سلام، اگر صدام رو می‌شنوی بگو ۱" }
-                ],
-                temperature: 0.7
-            })
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error("خطای API:", errorData);
-            alert("خطا از سمت سرور: " + (errorData.error?.message || "خطای ناشناخته"));
-            return;
-        }
-
-        const data = await response.json();
-        const aiMessage = data.choices[0].message.content;
-        console.log("پاسخ کامل:", data);
-        alert("هوش مصنوعی پاسخ داد: " + aiMessage);
-
-    } catch (error) {
-        console.error("خطای اتصال:", error);
-        alert("خطا در اتصال! احتمالاً به خاطر CORS یا اینترنت است. کنسول (F12) رو چک کن.");
-    }
+  console.log("پاسخ AI:", data.choices[0].message.content);
+  return data.choices[0].message.content;
 }
 
-// این خط رو برای تست دستی اضافه کن که به محض لود شدن اجرا بشه
-// testAIConnection();
+// مثال استفاده:
+// askAI("سلام، یک جمله انگیزشی برای شروع روز به من بگو").then(res => alert(res));
