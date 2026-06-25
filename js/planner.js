@@ -926,24 +926,24 @@ supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") window.location.href = "./login.html";
   else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
-async function askAI(userPrompt) {
+async function getSmartTip(userText) {
   try {
+    // دقت کن: آدرس سایتت رو نمی‌نویسی، فقط می‌نویسی /api/ai
     const response = await fetch("/api/ai", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: userPrompt })
+      body: JSON.stringify({ prompt: userText })
     });
 
     const data = await response.json();
-    
     if (data.choices && data.choices[0]) {
-      const message = data.choices[0].message.content;
-      console.log("پاسخ هوش مصنوعی:", message);
-      return message;
+      return data.choices[0].message.content;
     } else {
-      console.error("پاسخ نامعتبر از سرور:", data);
+      console.log("پاسخ سرور:", data);
+      return "خطا در دریافت پیام";
     }
-  } catch (error) {
-    console.error("خطا در ارتباط با API داخلی:", error);
+  } catch (err) {
+    console.error("خطای اتصال به سرور داخلی:", err);
+    return "اتصال برقرار نشد";
   }
 }
