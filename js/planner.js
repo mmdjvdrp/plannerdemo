@@ -1,7 +1,7 @@
 // js/planner.js
 import { supabase } from "./supabase.js";
 import { state, save, saveCloud, loadCloud } from "./storage.js";
-import { getNow, parseTime, pad, getLocalDateStr, fmtDateLabel, fmtTime } from "./helpers.js";
+import { getNow, parseTime, pad, getLocalDateStr, fmtDateLabel, fmtTime, isValidTimeRange } from "./helpers.js";
 import { render, applyTheme, updateLiveButton } from "./render.js";
 
 function safeBindEvent(id, event, callback) {
@@ -11,10 +11,100 @@ function safeBindEvent(id, event, callback) {
   }
 }
 
-// انیمیشن منو در شروع برنامه برای آگاهی کاربر از قابلیت اسکرول
+// نشانگر وضعیت اتصال آنلاین/آفلاین جهت افزایش پایداری همگام‌سازی ابری
+function updateOnlineStatus() {
+  let indicator = document.getElementById("sync-status");
+  if (!indicator) {
+    const logo = document.querySelector(".logo");
+    if (logo) {
+      indicator = document.createElement("span");
+      indicator.id = "sync-status";
+      indicator.style.cssText = "font-size: 10px; padding: 3px 8px; border-radius: 20px; margin-inline-start: 10px; font-weight: normal; display: inline-flex; align-items: center; gap: 4px;";
+      logo.appendChild(indicator);
+    }
+  }
+  if (indicator) {
+    if (navigator.onLine) {
+      indicator.innerHTML = "<span style='width:6px; height:6px; border-radius:50%; background:#10b981; display:inline-block;'></span> همگام‌سازی ابری";
+      indicator.style.background = "rgba(16, 185, 129, 0.1)";
+      indicator.style.color = "#10b981";
+    } else {
+      indicator.innerHTML = "<span style='width:6px; height:6px; border-radius:50%; background:#f59e0b; display:inline-block;'></span> ذخیره محلی (آفلاین)";
+      indicator.style.background = "rgba(245, 158, 11, 0.1)";
+      indicator.style.color = "#f59e0b";
+    }
+  }
+}
+window.addEventListener("online", updateOnlineStatus);
+window.addEventListener("offline", updateOnlineStatus);
+
+// کپی کل برنامه‌ریزی دیروز به امروز
+window.copyPreviousDayEvents = function() {
+  const [y, mo, d] = state.curDate.split("-").map(Number);
+  const yesterdayDate = new Date(y, mo - 1, d - 1);
+  const yesterdayStr = yesterdayDate.getFullYear() + "-" + pad(yesterdayDate.getMonth() + 1) + "-" + pad(yesterdayDate.getDate());
+  
+  const yesterdayEvents = state.events.filter(e => e.date === yesterdayStr);
+  if (yesterdayEvents.length === 0) {
+    alert("هیچ فعالیتی در روز قبل یافت نشد.");
+    return;
+  }
+  
+  if (!confirm(`آیا مایلید هر ${yesterdayEvents.length} فعالیت ثبت‌شده در دیروز را برای امروز نیز کپی کنید؟`)) {
+    return;
+  }
+  
+  yesterdayEvents.forEach(e => {
+    state.events.push({
+      ...e,
+      id: "e_copy_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      date: state.curDate
+    });
+  });
+  
+  save("planner_ev", state.events);
+  saveCloud();
+  render();
+  alert("فعالیت‌های روز قبل با موفقیت برای امروز شبیه‌سازی شدند.");
+};
+
+// خروجی تفکیک‌شده اکسل (CSV)
+window.exportCsvBackup = function() {
+  if (state.events.length === 0) {
+    alert("هیچ داده‌ای برای خروجی CSV یافت نشد.");
+    return;
+  }
+  let csvContent = "\uFEFF"; // افزودن BOM جهت خوانایی فونت فارسی در اکسل
+  csvContent += "شناسه,تاریخ,عنوان,موضوع,زمان شروع,زمان پایان,مدت زمان خالص (دقیقه),وقفه دستی (دقیقه),تگ‌ها\n";
+  
+  state.events.forEach(e => {
+    const cat = state.cats.find(c => c.id === e.catId)?.name || "نامشخص";
+    const tagsStr = (e.tags || []).join(" ");
+    const row = [
+      e.id,
+      e.date,
+      `"${(e.title || "").replace(/"/g, '""')}"`,
+      `"${cat.replace(/"/g, '""')}"`,
+      fmtTime(e.sMins),
+      fmtTime(e.eMins),
+      e.durMins,
+      e.pauseMins || 0,
+      `"${tagsStr.replace(/"/g, '""')}"`
+    ];
+    csvContent += row.join(",") + "\n";
+  });
+  
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `Planner_Backup_${state.curDate}.csv`;
+  a.click();
+};
+
+// انیمیشن کوچک حرکت منو در شروع برنامه برای آگاهی کاربر از قابلیت اسکرول افقی
 function triggerNavPeekAnimation() {
   const nav = document.querySelector(".app-nav");
-  if (nav && state.mobileNavStyle === 'scroll') {
+  if (nav) {
     setTimeout(() => {
       nav.scrollTo({ left: 60, behavior: "smooth" });
       setTimeout(() => {
@@ -24,129 +114,11 @@ function triggerNavPeekAnimation() {
   }
 }
 
-// سیستم راهنما و توتوریال تعاملی (Interactive Tour)
-window.startOnboardingTutorial = function() {
-  state.tutorialStep = 0;
-  const tutorialSteps = [
-    {
-      title: "خوش آمدید! 🌟",
-      text: "به تقویم روزانه هوشمند خوش آمدید. بیایید در چند مرحله کوتاه روش کار با برنامه را یاد بگیریم.",
-      element: ".logo"
-    },
-    {
-      title: "تایم‌لاین روزانه 📅",
-      text: "در این بخش فعالیت‌های ثبت شده روز را می‌بینید. کارها به طور خودکار گروه‌بندی یا مرتب می‌شوند.",
-      element: '[data-tab="tab-timeline"]'
-    },
-    {
-      title: "مدیریت کارها و عادت‌ها ✔️",
-      text: "اینجا می‌توانید لیست کارهای روزانه (تودو) خود را همراه با موضوع رنگی اختصاصی و عادت‌های هفتگی مدیریت کنید.",
-      element: '[data-tab="tab-habits"]'
-    },
-    {
-      title: "ثبت فعالیت و روتین‌ها ⚙️",
-      text: "از این بخش می‌توانید فعالیت جدید ثبت کنید، روتین‌های ثابت روزهای هفته را بسازید یا تایمر زنده پومودورو را روشن کنید.",
-      element: '[data-tab="tab-add"]'
-    },
-    {
-      title: "گزارش‌های پیشرفته 📊",
-      text: "نمودار دایره‌ای، خطی و نقشه‌های حرارتی میزان تمرکز و توزیع زمان شما را نمایش می‌دهند.",
-      element: '[data-tab="tab-reports"]'
-    },
-    {
-      title: "تنظیمات و سفارشی‌سازی 🛠️",
-      text: "در این بخش می‌توانید از بین ۴ حالت نمایش منوی موبایل انتخاب کنید، پوسته را تغییر دهید یا شکلک‌های خلق‌و‌خو را اختصاصی کنید.",
-      element: '[data-tab="tab-settings"]'
-    }
-  ];
-
-  const modal = document.getElementById("tutorial-modal");
-  const modalTitle = document.getElementById("tutorial-title");
-  const modalText = document.getElementById("tutorial-text");
-  const nextBtn = document.getElementById("tutorial-next-btn");
-  
-  if (!modal || !modalTitle || !modalText || !nextBtn) return;
-
-  const showStep = (idx) => {
-    const step = tutorialSteps[idx];
-    modalTitle.textContent = step.title;
-    modalText.textContent = step.text;
-    
-    document.querySelectorAll(".nav-btn").forEach(el => el.style.boxShadow = "none");
-    const target = document.querySelector(step.element);
-    if (target && idx > 0) {
-      target.style.boxShadow = "0 0 0 3px var(--accent)";
-    }
-
-    if (idx === tutorialSteps.length - 1) {
-      nextBtn.textContent = "شروع کار با برنامه 👍";
-    } else {
-      nextBtn.textContent = "بعدی ➔";
-    }
-    modal.style.display = "flex";
-  };
-
-  nextBtn.onclick = () => {
-    state.tutorialStep++;
-    if (state.tutorialStep < tutorialSteps.length) {
-      showStep(state.tutorialStep);
-    } else {
-      modal.style.display = "none";
-      document.querySelectorAll(".nav-btn").forEach(el => el.style.boxShadow = "none");
-      localStorage.setItem("planner_tutorial_seen", "true");
-    }
-  };
-
-  showStep(0);
-};
-
-// اجرای خودکار توتوریال برای دفعات اول
-function checkFirstTimeUser() {
-  const seen = localStorage.getItem("planner_tutorial_seen");
-  if (!seen) {
-    setTimeout(() => {
-      startOnboardingTutorial();
-    }, 2000);
-  }
-}
-
-// سیستم هوشمند اعلان‌ها و یادآور روتین‌ها
-function initRoutineAlertEngine() {
-  if (!('Notification' in window)) return;
-  
-  setInterval(() => {
-    if (Notification.permission !== 'granted') return;
-    
-    const nowStr = getNow();
-    const jsDay = new Date().getDay();
-    const satIndex = (jsDay + 1) % 7; 
-    
-    state.routines.forEach(rt => {
-      if (rt.startTime === nowStr && rt.days.includes(satIndex)) {
-        const lastNotifiedKey = `notified_${rt.id}_${nowStr}_${getLocalDateStr()}`;
-        if (!localStorage.getItem(lastNotifiedKey)) {
-          localStorage.setItem(lastNotifiedKey, "true");
-          
-          const cat = state.cats.find(c => c.id === rt.catId);
-          new Notification(`⏰ زمان انجام روتین فرا رسید!`, {
-            body: `فعالیت روتین "${rt.title}" ${cat ? `تحت موضوع ${cat.name}` : ''} را آغاز کنید.`,
-            icon: "./icons/icon-192.png"
-          });
-          
-          new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(()=>{});
-        }
-      }
-    });
-  }, 15000);
-}
-
-// پیاده‌سازی متغیرهای صفحه گالری سوپابیس
 state.galleryPage = 0;
 state.galleryPageSize = 30;
 state.currentSelectingPresetIdx = null;
-state.currentSelectingCatId = null; 
+state.currentSelectingCatId = null;
 
-// باز کردن گالری اموجی‌های متحرک برای خلق‌وخو
 window.openEmojiGallery = function(idx) {
   state.currentSelectingPresetIdx = idx;
   state.currentSelectingCatId = null;
@@ -158,7 +130,6 @@ window.openEmojiGallery = function(idx) {
   }
 };
 
-// باز کردن گالری اموجی‌های متحرک برای شکلک دسته‌بندی
 window.openCatEmojiPicker = function(catId) {
   state.currentSelectingCatId = catId;
   state.currentSelectingPresetIdx = null;
@@ -170,7 +141,6 @@ window.openCatEmojiPicker = function(catId) {
   }
 };
 
-// رندر کردن گالری ۲۰۰ تایی اموجی‌ها با قابلیت صفحه‌بندی
 window.renderGalleryGrid = function() {
   const grid = document.getElementById("gallery-grid");
   const label = document.getElementById("gallery-range-label");
@@ -259,7 +229,6 @@ safeBindEvent("gallery-next", "onclick", () => {
   }
 });
 
-// مدیریت تغییر تب‌ها
 window.switchTab = function(tabId) {
   document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
   document.querySelectorAll(".tab-section").forEach(s => s.classList.remove("active"));
@@ -276,15 +245,15 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
   });
 });
 
-// مدیریت تاریخ روزانه
 safeBindEvent("prev-day", "onclick", () => { shiftDay(-1); });
 safeBindEvent("next-day", "onclick", () => { shiftDay(1); });
-safeBindEvent("btn-today", "onclick", () => { state.curDate = getLocalDateStr(); render(); });
+safeBindEvent("btn-today", "onclick", () => { state.curDate = getLocalDateStr(); state.activeTagFilter = null; render(); });
 
 function shiftDay(n){
   const [y,mo,d] = state.curDate.split("-").map(Number);
   const dt = new Date(y, mo - 1, d + n);
   state.curDate = dt.getFullYear() + "-" + pad(dt.getMonth() + 1) + "-" + pad(dt.getDate());
+  state.activeTagFilter = null; // ریست کردن فیلتر تگ هنگام تعویض روز
   render();
 }
 
@@ -332,13 +301,6 @@ safeBindEvent("setting-theme-select", "onchange", (e) => {
 safeBindEvent("setting-accent-picker", "onchange", (e) => {
   state.accentColor = e.target.value; 
   save("planner_accent", state.accentColor); 
-  saveCloud(); 
-  applyTheme();
-});
-
-safeBindEvent("setting-mobile-nav", "onchange", (e) => {
-  state.mobileNavStyle = e.target.value; 
-  save("planner_mobile_nav_style", state.mobileNavStyle); 
   saveCloud(); 
   applyTheme();
 });
@@ -411,7 +373,7 @@ safeBindEvent("save-cat", "onclick", () => {
 });
 
 window.delCat = function(id) {
-  if(!confirm("آیا مطمئن هستید؟ با تایید شما، تمام فعالیت‌ها، روتین‌ها و اهدافی که تاکنون تحت این موضوع ثبت شده‌اند به طور کامل پاک خواهند شد.")) return;
+  if(!confirm("آیا مطمئن هستید؟ با تایید شما، تمام فعالیت‌ها، روتین‌ها و اهدافی که تاکنون تحت این موضوع ثبت شده‌اند به طور کامل و بدون بازگشت پاک خواهند شد.")) return;
   
   state.cats = state.cats.filter(c => c.id !== id);
   state.events = state.events.filter(e => e.catId !== id);
@@ -475,12 +437,17 @@ safeBindEvent("add-btn", "onclick", () => {
     alert("موضوع انتخاب نشده است"); 
     return; 
   }
+  
+  // اعتبارسنجی بازه زمانی فعالیت با توابع ارتقایافته helpers
+  if (!isValidTimeRange(stRaw, enRaw)) {
+    alert("خطا: زمان پایان فعالیت باید حتماً بعد از زمان شروع آن باشد.");
+    return;
+  }
+
   const sMins = parseTime(stRaw); 
   const eMins = parseTime(enRaw);
-  if(sMins === null || eMins === null) return alert("فرمت زمان وارد شده صحیح نیست");
-
   let totalDur = eMins - sMins; 
-  if(totalDur < 0) totalDur += 24 * 60; 
+  if(totalDur < 0) totalDur += 24 * 60;
 
   const pauseMins = parseInt(pauseRaw, 10) || 0;
   if (pauseMins < 0) {
@@ -552,7 +519,7 @@ safeBindEvent("live-btn", "onclick", () => {
 });
 
 window.cancelLiveSession = function() {
-  if(!confirm("آیا از لغو فعالیت زنده اطمینان دارید؟")) return;
+  if(!confirm("آیا از لغو و حذف زمان این فعالیت زنده اطمینان دارید؟ (هیچ فعالیتی ثبت نخواهد شد)")) return;
   state.liveSession = null;
   save("planner_live", null);
   saveCloud();
@@ -565,11 +532,9 @@ window.delEv = function(id) {
   save("planner_ev", state.events); saveCloud(); render();
 };
 
-// تودو و عادت‌ها
 safeBindEvent("add-todo-btn", "onclick", () => {
   const title = document.getElementById("todo-input").value.trim(); if(!title) return;
-  const catId = document.getElementById("todo-cat-select")?.value || "";
-  state.todos.push({ id: "t" + Date.now(), title, date: state.curDate, done: false, isDaily: false, doneDates: {}, catId });
+  state.todos.push({ id: "t" + Date.now(), title, date: state.curDate, done: false, isDaily: false, doneDates: {} });
   save("planner_todos", state.todos); saveCloud(); render(); document.getElementById("todo-input").value = "";
 });
 
@@ -630,7 +595,6 @@ window.deleteHabit = (id) => {
   render(); 
 };
 
-// ژورنال روزانه
 safeBindEvent("save-journal-btn", "onclick", () => {
   const note = document.getElementById("journal-textarea").value.trim();
   let selectedMood = state.moods[state.curDate]?.mood || null;
@@ -640,7 +604,6 @@ safeBindEvent("save-journal-btn", "onclick", () => {
   alert("خاطره‌نویسی و یادداشت امروز با موفقیت ثبت شد!");
 });
 
-// تغییر نام نمایشی کاربری
 safeBindEvent("save-display-name-btn", "onclick", async () => {
   const newName = document.getElementById("setting-display-name").value.trim();
   if(!newName) return alert("لطفاً نام نمایشی معتبری وارد کنید.");
@@ -725,9 +688,21 @@ safeBindEvent("export-btn", "onclick", () => {
   a.click();
 });
 
-safeBindEvent("report-confirm-btn", "onclick", () => render());
+// ایجاد دکمه خروجی CSV به محض لود تنظیمات
+setTimeout(() => {
+  const exportBtn = document.getElementById("export-btn");
+  if (exportBtn && !document.getElementById("export-csv-btn")) {
+    const csvBtn = document.createElement("button");
+    csvBtn.id = "export-csv-btn";
+    csvBtn.className = "btn-live";
+    csvBtn.style.marginTop = "8px";
+    csvBtn.textContent = "📊 خروجی تفکیک‌شده اکسل (CSV)";
+    csvBtn.onclick = window.exportCsvBackup;
+    exportBtn.parentNode.appendChild(csvBtn);
+  }
+}, 1000);
 
-// ================= مدیریت روتین و اهداف =================
+safeBindEvent("report-confirm-btn", "onclick", () => render());
 
 safeBindEvent("toggle-rt-form-btn", "onclick", () => {
   const p = document.getElementById("rt-card-panel");
@@ -745,15 +720,19 @@ safeBindEvent("close-goal-panel", "onclick", () => {
   const p = document.getElementById("goal-card-panel"); if(p) p.style.display = 'none';
 });
 
-window.toggleRtDaySelection = function(btn, dayNum) {
-  if (state.selectedRtDays.includes(dayNum)) {
-    state.selectedRtDays = state.selectedRtDays.filter(d => d !== dayNum);
-    btn.classList.remove("active");
-  } else {
-    state.selectedRtDays.push(dayNum);
-    btn.classList.add("active");
-  }
-};
+const dayBtns = document.querySelectorAll('.rt-day-btn');
+dayBtns.forEach(btn => {
+  btn.onclick = function() {
+    const day = parseInt(this.getAttribute('data-day'), 10);
+    if (state.selectedRtDays.includes(day)) {
+      state.selectedRtDays = state.selectedRtDays.filter(d => d !== day);
+      this.style.background = 'var(--surface2)'; this.style.color = 'var(--text)';
+    } else {
+      state.selectedRtDays.push(day);
+      this.style.background = 'var(--accent)'; this.style.color = '#fff';
+    }
+  };
+});
 
 safeBindEvent("add-rt-btn", "onclick", () => {
   const title = document.getElementById('rt-title').value.trim();
@@ -763,7 +742,10 @@ safeBindEvent("add-rt-btn", "onclick", () => {
 
   if (!title || !start || !end || !catId) return alert('لطفاً تمامی فیلدهای روتین را تکمیل کنید');
   if (state.selectedRtDays.length === 0) return alert('حداقل یک روز را انتخاب کنید');
-  if (parseTime(start) === null || parseTime(end) === null) return alert('فرمت زمان روتین نامعتبر است');
+  
+  if (!isValidTimeRange(start, end)) {
+    return alert('خطا: زمان پایان روتین باید بعد از زمان شروع آن باشد.');
+  }
 
   state.routines.push({
     id: Date.now().toString(), title, catId, days: [...state.selectedRtDays], startTime: start, endTime: end
@@ -774,7 +756,7 @@ safeBindEvent("add-rt-btn", "onclick", () => {
   document.getElementById('rt-start').value = '';
   document.getElementById('rt-end').value = '';
   state.selectedRtDays = [];
-  document.querySelectorAll('.rt-day-btn').forEach(b => b.classList.remove('active'));
+  dayBtns.forEach(b => { b.style.background = 'var(--surface2)'; b.style.color = 'var(--text)'; });
   const p = document.getElementById("rt-card-panel"); if(p) p.style.display = 'none';
   render();
 });
@@ -815,7 +797,7 @@ window.deleteGoal = function(id) {
 
 window.addManualPause = () => {
   if (!state.liveSession) return;
-  const minsInput = prompt("چند دقیقه وقفه دستی مایلید ثبت کنید؟", "30");
+  const minsInput = prompt("چند دقیقه وقفه دستی مایلید ثبت کنید؟ (مثلاً ۶۰)", "30");
   if (minsInput === null) return;
   const mins = parseInt(minsInput, 10);
   if (isNaN(mins) || mins < 0) {
@@ -838,7 +820,7 @@ if (notifyBtn) {
 
   notifyBtn.onclick = async () => {
     if (!('Notification' in window)) {
-      alert("مرورگر شما از سیستم ارسال اعلان سیستمی پشتیبانی نمی‌کند.");
+      alert("مرورگر شما از سیستم ارسال اعلان‌های سیستمی پشتیبانی نمی‌کند.");
       return;
     }
 
@@ -849,16 +831,15 @@ if (notifyBtn) {
       notifyBtn.style.color = "var(--accent)";
 
       new Notification("تقویم روزانه 📅", {
-        body: "اعلان‌های هوشمند با موفقیت فعال شدند! روتین‌ها و پایان پومودورو به شما یادآوری می‌شوند.",
+        body: "اعلان‌های سیستمی با موفقیت فعال شدند! از این پس اتمام پومودورو به شما اعلام می‌شود.",
         icon: "./icons/icon-192.png"
       });
     } else if (permission === 'denied') {
-      alert("دسترسی به اعلان‌ها مسدود است. لطفاً از بخش تنظیمات مرورگر خود آن را آزاد کنید.");
+      alert("درخواست دسترسی به اعلان‌ها مسدود شده است. برای فعال‌سازی مجدد، باید دسترسی اعلان را در تنظیمات مرورگر بازنشانی کنید.");
     }
   };
 }
 
-// احراز هویت و بارگذاری اطلاعات کاربری
 async function handleUserSession(session) {
   const user = session?.user;
   if (!user) { window.location.href = "./login.html"; return; }
@@ -900,10 +881,10 @@ async function handleUserSession(session) {
 
   try {
     await loadCloud();
+    updateOnlineStatus();
     applyTheme();
     render();
-    triggerNavPeekAnimation(); 
-    checkFirstTimeUser();
+    triggerNavPeekAnimation();
   } catch (err) { console.error(err); }
 }
 
@@ -911,52 +892,13 @@ async function initAuth() {
   try {
     const { data: { session } } = await supabase.auth.getSession();
     if (session) await handleUserSession(session);
-    else {
-      if (!window.location.hash.includes("type=recovery")) {
-        window.location.href = "./login.html";
-      }
-    }
+    else window.location.href = "./login.html";
   } catch (err) { window.location.href = "./login.html"; }
 }
 
 initAuth();
-initRoutineAlertEngine();
 
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") window.location.href = "./login.html";
   else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
-async function getSmartTip(userText) {
-  try {
-    // دقت کن: آدرس سایتت رو نمی‌نویسی، فقط می‌نویسی /api/ai
-    const response = await fetch("/api/ai", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: userText })
-    });
-
-    const data = await response.json();
-    if (data.choices && data.choices[0]) {
-      return data.choices[0].message.content;
-    } else {
-      console.log("پاسخ سرور:", data);
-      return "خطا در دریافت پیام";
-    }
-  } catch (err) {
-    console.error("خطای اتصال به سرور داخلی:", err);
-    return "اتصال برقرار نشد";
-  }
-}
-// این تابع رو بگذار آخر planner.js
-async function injectMotivation() {
-  const tipBox = document.querySelector(".card[style*='background: var(--surface2)'] div");
-  
-  if (tipBox && tipBox.textContent.includes("پیام انگیزشی")) {
-    tipBox.textContent = "⏳ در حال فکر کردن...";
-    const aiText = await getSmartTip("یک جمله انگیزشی خفن و بسیار کوتاه برای شروع کار امروز بگو");
-    tipBox.textContent = "💡 " + aiText;
-  }
-}
-
-// فراخوانی
-injectMotivation();
