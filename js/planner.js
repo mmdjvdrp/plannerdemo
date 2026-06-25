@@ -926,3 +926,29 @@ supabase.auth.onAuthStateChange((event, session) => {
   if (event === "SIGNED_OUT") window.location.href = "./login.html";
   else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
+async function callDeepSeek(userMessage) {
+    const apiKey = "om-2RPXvGmPydqP85rxiSsJRcmWogdxq41xhAxvTcYrr4T"; // کلیدی که گرفتی
+    
+    try {
+        const response = await fetch("https://api.openmodel.ai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: "deepseek-v4-flash", // نام مدل را چک کن که دقیق باشد
+                messages: [
+                    { role: "system", content: "تو یک دستیار هوشمند برای اپلیکیشن پلنر هستی." },
+                    { role: "user", content: userMessage }
+                ]
+            })
+        });
+
+        const data = await response.json();
+        console.log("پاسخ هوش مصنوعی:", data.choices[0].message.content);
+        return data.choices[0].message.content;
+    } catch (error) {
+        console.error("خطا در ارتباط با هوش مصنوعی:", error);
+    }
+}
