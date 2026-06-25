@@ -34,20 +34,15 @@ export const state = {
   liveSession: load('planner_live', null),
   theme: load('planner_theme', 'auto'),
   accentColor: load('planner_accent', '#7c5cfc'), 
-  
   calendarPref: load('planner_calendar_pref', 'jalali'), 
   timeFormatPref: load('planner_time_format_pref', 'hour-min'), 
   weekStartPref: load('planner_week_start_pref', 'sat'), 
   chartTypePref: load('planner_chart_type_pref', 'doughnut'), 
   groupTimelinePref: load('planner_group_timeline_pref', true), 
   selectedReportCats: load('planner_selected_report_cats', []), 
-  
-  // متغیر سبک منوی ناوبری موبایل (با مقدار پیش‌فرض شبکه دوردیفه)
   mobileNavStyle: load('planner_mobile_nav_style', 'grid'),
-  
   pomodoroWorkPref: load('planner_pomo_work_pref', 25),
   pomodoroBreakPref: load('planner_pomo_break_pref', 5),
-  
   moodPresets: load('planner_mood_presets', [
     { level: '1', type: 'text', value: '🤩', label: 'بسیار عالی' },
     { level: '2', type: 'text', value: '😊', label: 'خوب و آرام' },
@@ -55,13 +50,12 @@ export const state = {
     { level: '4', type: 'text', value: '😔', label: 'دلگیر و غمگین' },
     { level: '5', type: 'text', value: '😡', label: 'عصبانی یا کلافه' }
   ]),
-  
   curDate: getLocalDateStr(),
   mapMonth: getLocalDateStr().slice(0, 7),
   editingEventId: null,
   activeView: 'daily',
   selectedRtDays: [],
-  activeTagFilter: null // متغیر جدید فیلتر پویای برچسب‌ها
+  activeTagFilter: null
 };
 
 export async function saveCloud(){
@@ -71,17 +65,7 @@ export async function saveCloud(){
     
     await supabase.from("planner_data").upsert({
       user_id: user.id,
-      data: { 
-        events: state.events, cats: state.cats, liveSession: state.liveSession, 
-        theme: state.theme, routines: state.routines, goals: state.goals,
-        todos: state.todos, habits: state.habits, habitLogs: state.habitLogs,
-        moods: state.moods, accentColor: state.accentColor,
-        calendarPref: state.calendarPref, timeFormatPref: state.timeFormatPref, 
-        weekStartPref: state.weekStartPref, chartTypePref: state.chartTypePref,
-        groupTimelinePref: state.groupTimelinePref, moodPresets: state.moodPresets,
-        pomodoroWorkPref: state.pomodoroWorkPref, pomodoroBreakPref: state.pomodoroBreakPref,
-        selectedReportCats: state.selectedReportCats, mobileNavStyle: state.mobileNavStyle
-      }
+      data: { ...state }
     }, { onConflict: 'user_id' });
   } catch (err) { console.error("Error saving to cloud", err); }
 }
@@ -93,51 +77,11 @@ export async function loadCloud(){
     const { data } = await supabase.from("planner_data").select("data").eq("user_id", user.id).maybeSingle();
     
     if(data && data.data){
-      const cd = data.data;
-      state.events      = cd.events || [];
-      state.cats        = cd.cats || [];
-      state.theme       = cd.theme || "auto";
-      state.accentColor = cd.accentColor || "#7c5cfc";
-      state.liveSession = cd.liveSession || null;
-      state.routines    = cd.routines || [];
-      state.goals       = cd.goals || [];
-      state.todos       = cd.todos || [];
-      state.habits      = cd.habits || [];
-      state.habitLogs   = cd.habitLogs || {};
-      state.moods       = cd.moods || {};
-      
-      state.calendarPref   = cd.calendarPref || "jalali";
-      state.timeFormatPref = cd.timeFormatPref || "hour-min";
-      state.weekStartPref  = cd.weekStartPref || "sat";
-      state.chartTypePref  = cd.chartTypePref || "doughnut";
-      state.moodPresets    = cd.moodPresets || state.moodPresets;
-      state.groupTimelinePref = cd.groupTimelinePref !== undefined ? cd.groupTimelinePref : true;
-      state.selectedReportCats = cd.selectedReportCats || [];
-      state.mobileNavStyle = cd.mobileNavStyle || "grid";
-      
-      state.pomodoroWorkPref  = cd.pomodoroWorkPref || 25;
-      state.pomodoroBreakPref = cd.pomodoroBreakPref || 5;
-
-      save('planner_ev', state.events);
-      save('planner_cats', state.cats);
-      save('planner_theme', state.theme);
-      save('planner_accent', state.accentColor);
-      save('planner_live', state.liveSession);
-      save('planner_routines', state.routines);
-      save('planner_goals', state.goals);
-      save('planner_todos', state.todos);
-      save('planner_habits', state.habits);
-      save('planner_habitLogs', state.habitLogs);
-      save('planner_moods', state.moods);
-      save('planner_calendar_pref', state.calendarPref);
-      save('planner_time_format_pref', state.timeFormatPref);
-      save('planner_week_start_pref', state.weekStartPref);
-      save('planner_chart_type_pref', state.chartTypePref);
-      save('planner_group_timeline_pref', state.groupTimelinePref);
-      save('planner_pomo_work_pref', state.pomodoroWorkPref);
-      save('planner_pomo_break_pref', state.pomodoroBreakPref);
-      save('planner_selected_report_cats', state.selectedReportCats);
-      save('planner_mobile_nav_style', state.mobileNavStyle);
+      Object.assign(state, data.data);
+      // بروزرسانی LocalStorage
+      Object.keys(data.data).forEach(key => {
+        save('planner_' + key, data.data[key]);
+      });
     }
   } catch (err) { console.error("Error loading cloud data", err); }
 }
