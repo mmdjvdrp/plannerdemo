@@ -927,18 +927,23 @@ supabase.auth.onAuthStateChange((event, session) => {
   else if (event === "SIGNED_IN" && session) handleUserSession(session);
 });
 async function askAI(userPrompt) {
-  const { data, error } = await supabase.functions.invoke('ai-helper', {
-    body: { prompt: userPrompt }
-  });
+  try {
+    const response = await fetch("/api/ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: userPrompt })
+    });
 
-  if (error) {
-    console.error("خطای هوش مصنوعی:", error);
-    return;
+    const data = await response.json();
+    
+    if (data.choices && data.choices[0]) {
+      const message = data.choices[0].message.content;
+      console.log("پاسخ هوش مصنوعی:", message);
+      return message;
+    } else {
+      console.error("پاسخ نامعتبر از سرور:", data);
+    }
+  } catch (error) {
+    console.error("خطا در ارتباط با API داخلی:", error);
   }
-
-  console.log("پاسخ AI:", data.choices[0].message.content);
-  return data.choices[0].message.content;
 }
-
-// مثال استفاده:
-// askAI("سلام، یک جمله انگیزشی برای شروع روز به من بگو").then(res => alert(res));
