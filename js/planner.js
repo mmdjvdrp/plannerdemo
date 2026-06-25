@@ -947,3 +947,16 @@ async function getSmartTip(userText) {
     return "اتصال برقرار نشد";
   }
 }
+// این تابع رو بگذار آخر planner.js
+async function injectMotivation() {
+  const tipBox = document.querySelector(".card[style*='background: var(--surface2)'] div");
+  
+  if (tipBox && tipBox.textContent.includes("پیام انگیزشی")) {
+    tipBox.textContent = "⏳ در حال فکر کردن...";
+    const aiText = await getSmartTip("یک جمله انگیزشی خفن و بسیار کوتاه برای شروع کار امروز بگو");
+    tipBox.textContent = "💡 " + aiText;
+  }
+}
+
+// فراخوانی
+injectMotivation();
