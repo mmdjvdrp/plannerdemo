@@ -27,7 +27,7 @@ export function fmtTime(mins){
   return pad(Math.floor(mins/60))+':'+pad(mins%60);
 }
 
-// قالب‌بندی مدت زمان بر اساس انتخاب کاربر
+// قالب‌بندی مدت زمان بر اساس انتخاب کاربر (ساعت و دقیقه / ساعت اعشاری / فقط دقیقه)
 export function fmtDur(mins){
   const pref = state.timeFormatPref || 'hour-min';
   
@@ -38,26 +38,35 @@ export function fmtDur(mins){
     return (mins / 60).toFixed(1) + 'h';
   }
   
+  // پیش‌فرض: ساعت و دقیقه
   const h=Math.floor(mins/60), m=mins%60;
   if(h===0) return m+'m';
   if(m===0) return h+'h';
   return h+'h '+m+'m';
 }
 
-// نمایش بومی تاریخ بر اساس سیستم تقویم انتخاب شده
+// نمایش بومی تاریخ بر اساس سیستم تقویم انتخاب شده (شمسی یا انگلیسی)
 export function fmtDateLabel(d){
-  const [y,mo,day]=d.split('-').map(Number);
-  const dt=new Date(y, mo-1, day);
-  const isJalali = (state.calendarPref === 'jalali');
-  
-  if (isJalali) {
-    return new Intl.DateTimeFormat('fa-IR', { 
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-    }).format(dt);
-  } else {
-    return new Intl.DateTimeFormat('en-US', { 
-      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
-    }).format(dt);
+  if (!d) return 'نامشخص';
+  try {
+    const parts = d.split('-');
+    if (parts.length !== 3) return d;
+    const [y,mo,day] = parts.map(Number);
+    const dt=new Date(y, mo-1, day);
+    if (isNaN(dt.getTime())) return d;
+    const isJalali = (state.calendarPref === 'jalali');
+    
+    if (isJalali) {
+      return new Intl.DateTimeFormat('fa-IR', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      }).format(dt);
+    } else {
+      return new Intl.DateTimeFormat('en-US', { 
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      }).format(dt);
+    }
+  } catch (e) {
+    return d;
   }
 }
 
@@ -110,4 +119,18 @@ export function getWeekDates(dateStr) {
     });
   }
   return weekDates;
+}
+
+// اعتبارسنجی محدوده زمانی وارد شده جهت جلوگیری از محاسبات اشتباه یا منفی
+export function isValidTimeRange(startStr, endStr) {
+  const sMins = parseTime(startStr);
+  const eMins = parseTime(endStr);
+  if (sMins === null || eMins === null) return false;
+  return eMins > sMins;
+}
+
+// اعتبارسنجی ساختار آدرس ایمیل
+export function isValidEmail(email) {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(String(email).toLowerCase());
 }
