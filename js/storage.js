@@ -42,6 +42,7 @@ export const state = {
   groupTimelinePref: load('planner_group_timeline_pref', true), 
   selectedReportCats: load('planner_selected_report_cats', []), 
   
+  // متغیر سبک منوی ناوبری موبایل (با مقدار پیش‌فرض شبکه دوردیفه)
   mobileNavStyle: load('planner_mobile_nav_style', 'grid'),
   
   pomodoroWorkPref: load('planner_pomo_work_pref', 25),
@@ -60,9 +61,7 @@ export const state = {
   editingEventId: null,
   activeView: 'daily',
   selectedRtDays: [],
-
-  // وضعیت صداهای پس‌زمینه سنتزشده فعال
-  focusSoundPlaying: null 
+  activeTagFilter: null // متغیر جدید فیلتر پویای برچسب‌ها
 };
 
 export async function saveCloud(){
